@@ -109,7 +109,7 @@
             output +='Main Menu';
             output +='</div>';
             output +='<p>Commands in Teleport are always preceded by !teleport.</p>';
-            output +='<p>' + configButtonBuilder({param:'Create Teleport Pad',apicall:'createpad',icon:'teleportall'}) + '</p>';
+            output +='<p>' + configButtonBuilder({param:'Create Teleport Pad',apicall:'createpad|?{Pad Name|Telepad ' + state.teleport.increment++ + '}',icon:'teleportall'}) + '</p>';
             output +='<p>' + configButtonBuilder({param:'Config Panel',apicall:'config',icon:'config'}) + '</p>';
             output +='<p>' + configButtonBuilder({param:'Teleporter Pad List',apicall:'padlist',icon:'portal'}) + '</p>';
             output +='</div>';
@@ -392,11 +392,12 @@
                         return outputToChat('Select a token to be the teleport pad.');
                     }
                     let pad = getObj('graphic',msg.selected[0]._id);
-                    if(pad.get('_subtype') === 'card'){outputToChat("Select a target token that is not a card.")}
+                    if(pad.get('_subtype') === 'card'){ return outputToChat("Select a target token that is not a card.")}
+                    if(pad.get('bar1_value') === 'teleportpad'){return outputToChat("Select a target token that is not already a teleport pad.")}
                     pad.set({
                         layer:'gmlayer',
                         bar1_value:'teleportpad',
-                        name: ((pad.get('name') === "")?'Telepad ' + state.teleport.increment++:pad.get('name')),
+                        name: ((pad.get('name') === "")?msg.content.split('|')[1]:pad.get('name')),
                         showname: true
                     })
                     padDisplay();
