@@ -1,469 +1,468 @@
-/* ************ TELEPORTING SCRIPT  **************************
-*   The intention of this script is to allow the DM to teleport
-*   one or all characters to a location based on a token placed 
-*   on the DM layer of the map. 
-*     To activate the script, type "!Teleport " and add the name
-*   of the teleport location (must not contain spaces) and then 
-*   the name of the party member to teleport there. They must be 
-*   seperated by commas. If you want all to teleport, type all. 
-*   ie. !Teleport teleport01, all - teleports all players to teleport01
-*
-*   AUTOTELEPORTING: This feature allows you to place a token on 
-*   One square (for example stairs) and it will auto move a token 
-*   to the linked location and back again should you choose.
-*   Linked locations need to be tokens placed on the GMLayer.
-*   Naming conventions:
-*   Two way doors:   XXXXXXXX2A, XXXXXXXXX2B
-*   Three way dooes: XXXXXXXX3A, XXXXXXXXX3B, XXXXXXXXX3C
-*       (in the case of one way doors, dont create a 3C)
-*   This system can handle up to 9 way doors (9I max).
-****************************************************************/
-
-on('ready',() => {
-    
-    var Teleporter = Teleporter || function(){
-        
-        // These following three functions parse out and then compare token markers
-        // on teleporting tokens and teleportation targets, but only for auto-teleport
-        
-        const statusmarkersToObject = (stats) => _.reduce(stats.split(/,/), function(memo, value) {
-            let parts = value.split(/@/),
-            num = parseInt(parts[1] || '0', 10);
-    
-            if (parts[0].length) {
-                memo[parts[0]] = Math.max(num, memo[parts[0]] || 0);
-            }
-            return memo;
-        }, {});
-        
-        
-        var findContains = function(obj,layer){
-            "use strict";
-            let cx = obj.get('left'),
-                cy = obj.get('top');
-    
-            if(obj) {
-                layer = layer || 'gmlayer';
-                return _.chain(findObjs({
-                        _pageid: obj.get('pageid'),                              
-                        _type: "graphic",
-                        layer: layer 
-                    }))
-                    .filter((o)=>/Teleport/.test(o.get('name')))
-                    .reduce(function(m,o){
-                        let l=o.get('left'),
-                            t=o.get('top'),
-                            w=o.get('width'),
-                            h=o.get('height'),
-                            ol=l-(w/2),
-                            or=l+(w/2),
-                            ot=t-(h/2),
-                            ob=t+(h/2);
-                            
-                        if(    ol <= cx && cx <= or 
-                            && ot <= cy && cy <= ob 
-                        ){
-                            m.push(o);
-                            log("Teleporter Name:" + o.get('name'));
-                        }
-                        return m;
-                    },[])
-                    .value();
-            }
-            return [];
-         }; 
-    
-        const CheckLock = (portal, obj) => {
-            let objKey=statusmarkersToObject(obj.get('statusmarkers'));
-            return _.reduce(statusmarkersToObject(portal.get('statusmarkers')),(m,v,k) => m && _.has(objKey,k) && objKey[k] === v, true);
-        };
-        
+    var Teleport = Teleport || (function(){
         /*
-        The msg based teleporter works slightly differently from the teleporter-intersection script
-        It relies on the list of passed tokens to grab and teleport tokens - it right now has no swap to GM layer, but 
-        it is hoped to integrate both functions into the same architecture to avoid redundancy, if it is at all possible. 
-        Right now: the msg based teleporter needs: 
-            - Swap to GM layer for each token DONE
-            - Control for single FX generation on "All" DONE
-            - Check on all "all" to make sure it is PLAYER or ALL controlled explicitly
-                * otherwise this results in all tokens, player and GM controlled as long as they have a sheet, being teleported. DONE
-            - Add ping if it is not "ALL", or add GM Ping (default) on any call of "ALL"
-            - consider a pass of an fx for fun, maybe not - the way it is done now. (pass attr?)
-            - consider audio default for teleport as well.(pass and in destination?)
-            - function is inefficient since it performs a MASSIVE search multiple times to move a single token in series. DONE
-            - Need to adapt this to digest all of the entries at once - can the findObjs only take a single entry? DONE
+            Teleport is a script designed to make a few things easier: 
+                - multi-storey buildings
+                - building interiors
+                - magical teleportation
+                - falling traps and hazards
+                - pings to drag player attention without ping-rings
+                - spawning special effects at locations with pings
+                - causing GM layer creatures to appear with pings and effects
+                - anything else you can think of for the tools this provides. 
         */
-        
-        var Teleport = function (CharName, TargetName) {
-            "use strict";
-            var LocX = 0;
-            var LocY = 0;
-            var LocFX = "";
-            var player = (CharName === "all")?Teleporter.DEFAULTPLAYER:"";
-            var follow = true;
-            var oldColor = "transparent";
-            var lastObj = null;
-            
-            var location = findObjs({
-                _pageid: Campaign().get("playerpageid"),                              
-                _type: "graphic",
-                layer: "gmlayer", //target location MUST be on GM layer
-                name: TargetName
-            });
-            
-            if (location.length === 0) {
-                sendChat("System", "/w gm No location named " + TargetName + " found. Try checking the spelling and making sure it is on the gm layer.");
-                return; //exit if invalid target location
+        // DEFAULTPLAYER is used for pings where a controlled by lists "all"
+        // and for other situations where a GM might want to ping all. 
+        state.teleport = state.teleport || {};
+        state.teleport.config = state.teleport.config || {};
+        state.teleport.increment = state.teleport.increment || 0;
+        var getStateParam = function(param,deflt){
+            if(typeof state.teleport.config[param] !== 'null' && typeof state.teleport.config[param] !== 'undefined'){
+                return state.teleport.config[param];
+            }else{
+                return setStateParam(param,deflt);
             }
-         
-            LocX = location[0].get("left");
-            LocY = location[0].get("top");
-            // Determine if there is any FX associated with the target obj in the gmnotes
-            LocFX = unescape(location[0].get('gmnotes')).replace(/<[^>]*>/g,'');
-            // If the unescaped content has curly braces, parse as an object, otherwise it's an unescaped string.
-            if(LocFX !== '' && LocFX.indexOf("{") !== -1){
-                LocFX = JSON.parse(LocFX); 
-            }
-            
-            
-            //just get tokens on the objects layer - don't specify name if all.
-            if (CharName === "all"){
-                var targets = findObjs({
-                    _pageid: Campaign().get("playerpageid"),                              
-                    _type: "graphic",
-                    layer: "objects"
-                });
-            }
-            else
-            {
-                var targets = findObjs({
-                    _pageid: Campaign().get("playerpageid"),                              
-                    _type: "graphic",
-                    layer: "objects",
-                    name: CharName
-                });  
-            }
-            
-            
-            if(targets.length === 0){
-                sendChat("System", "/w gm No character named " + CharName + " found. Please check the spelling, make sure it is on the object layer, and try again.");
-                return;
-            }
-            
-            _.each(targets, function(obj) {
-                //Only player tokens get moved if the character is "all". 
-                if (CharName === "all") {
-                    if (obj.get("represents") !== "" && getObj("character", obj.get('represents')).get('controlledby') !== "") {
-                        obj.set({layer:'gmlayer'});
-                        _.delay(()=>{
-                            obj.set({
-                                left: LocX + 1,
-                                top: LocY,
-                                lastmove: ''
-                            });
-                            _.delay(()=>{
-                                obj.set({
-                                layer: 'objects'
-                                });
-                            },500);
-                        },100);
-                    }
-                } 
-                else {
-                    
-
-                    let character=(obj.get('represents'))?getObj("character", obj.get('represents')):null;
-                    
-                    let controller = (character)?character.get('controlledby'):'';
-                    if(controller !== '' && controller !== 'all' ){
-                        player=getObj("player", controller);
-                        follow=true;
-                    }else{
-                        // set player to GM (eventually), and if not "all" set follow to false
-                        player=Teleporter.DEFAULTPLAYER;
-                        follow=(controller === 'all')?true:false;
-                    }
-                    
-                    if((!Teleporter.AUTOPINGMOVE && follow) || !follow){
-                        follow=false;
-                    }else{
-                        oldColor=player.get("color");
-                        if (Teleporter.HIDEPINGFX){player.set({color:"transparent"});}
-                    }
-                    
-                    
-                    obj.set({layer:'gmlayer'});
-                    _.delay(()=>{
-                        obj.set({
-                            left: LocX + 1,
-                            top: LocY,
-                            lastmove: ''
-                        });
-                        _.delay(()=>{
-                            obj.set({
-                            layer: 'objects'
-                            });
-                            if(LocFX !== '' && Teleporter.AUTOPLAYFX ){
-                                if(_.isString(LocFX)){
-                                    spawnFx(LocX, LocY, LocFX, obj.get('pageid'));
-                                }else{
-                                    spawnFxWithDefinition(LocX, LocY, LocFX, obj.get('pageid'));
-                                }
-                            }
-                            
-                            if(follow){sendPing(LocX, LocY, obj.get('pageid'), player.get("_id"), true, player.get("_id"));}
-                            
-                            _.delay(()=>{
-                                // Longer delay to re-set the player color to allow the ping to finish.
-                                if(follow){player.set({color: oldColor});}
-                            },1000);
-                        },500);
-                    },100);
-                }
-                lastObj = obj;
-            });
-            
-            if (CharName === "all"){
-                
-                if(!Teleporter.AUTOPINGMOVE){
-                    follow=false;
-                }else{
-                    follow=true;
-                    oldColor=player.get("color");
-                    if (Teleporter.HIDEPINGFX){player.set({color:"transparent"});}
-                }
-                /**/
-                _.delay(()=>{
-                    if(LocFX !== '' && Teleporter.AUTOPLAYFX ){
-                        if(_.isString(LocFX)){
-                            spawnFx(LocX, LocY, LocFX, Campaign().get("playerpageid"));
-                        }else{
-                            spawnFxWithDefinition(LocX, LocY, LocFX, Campaign().get("playerpageid"));
-                        }
-                    }
-                    
-                    if(follow){sendPing(LocX, LocY, lastObj.get('pageid'), player.get("_id"), true, player.get("_id"));}
-                    
-                    _.delay(()=>{
-                // Longer delay to re-set the player color to allow the ping to finish.
-                        if(follow){player.set({color: oldColor});}
-                    },1000);
-               },500);
-            }
+        },
+        setStateParam = function(param, setting){
+            state.teleport.config[param] = setting;
+            return setting;
         };
-        
-        
-        on("change:graphic", function(obj) {
-            "use strict";
-    
-            if (obj.get("name").indexOf("Teleport") !== -1 || /(walls|map)/.test(obj.get('layer'))) {
-                return; //Do not teleport teleport pads!!
+        var DEFAULTPLAYER,
+        AUTOTELEPORT = getStateParam("AUTOTELEPORT",true),
+        AUTOPING = getStateParam("AUTOPING",true),
+        HIDEPING = getStateParam("HIDEPING",true),
+        SHOWSFX = getStateParam("SHOWSFX",true),
+        // The emojiObj is used to store the graphics used for config buttons and activation buttons
+        emojiObj = { 
+            'on': 0x2705,
+            'off': 0x274C,
+            'active':0x1F4A5,
+            'inactive':0x1F6A7,
+            'edit':0x1F528,
+            'config':0x1F529,
+            'linked':0x1F517,
+            'teleport':0x2728,
+            'teleportall':0x1F52E,
+            'portal':0x1F300,
+            'restrictedportal':0x1F365,
+            'help':0x1F9ED,
+            'error':0x26A0,
+            'locked':0x1F6D1,
+            'unlocked':0x1F7E2,
+            'ping':0x1F50E,
+            'menu':0x1F53C,
+            'pad':0x1F4AB
+        },
+        defaultButtonStyles = 'border:1px solid black;border-radius:.5em;padding:2px;margin:2px;font-weight:bold;font-size:.9em;text-align:right;',
+        configButtonStyles = 'width:150px;background-color:white;color:black;',
+        emojiButtonStyles = 'width:15px;height:15px;background-color:#efefef;color:black;',
+        emojiButtonBuilder = function(contentsObj){
+            var subconstruct = function(txt){results += txt},
+            results = '<a title="'+ contentsObj.param + '" href="!teleport --';
+            subconstruct( contentsObj.apicall );
+            subconstruct('" style="' );
+            subconstruct( defaultButtonStyles + emojiButtonStyles + '">');
+            if(contentsObj.icon){
+                subconstruct(String.fromCodePoint(emojiObj[contentsObj.icon]));
+            }else{
+                subconstruct( ( ( Teleport.configparams[contentsObj.param.toString()])?String.fromCodePoint(emojiObj.on):String.fromCodePoint(emojiObj.off) ) );
             }
-            if (Teleporter.AUTOTELEPORTER === false) {
-                return; //Exit if auto Teleport is disabled
+            subconstruct('</a>');
+            return results
+        },
+        configButtonBuilder = function(contentsObj){
+            var subconstruct = function(txt){results += txt},
+            results = '<a href="!teleport --';
+            subconstruct( contentsObj.apicall );
+            subconstruct('" style="background-color:white' );
+            subconstruct(';color:black;' + defaultButtonStyles + configButtonStyles + '">');
+            if(contentsObj.icon){
+                subconstruct( contentsObj.param + ': ' + String.fromCodePoint(emojiObj[contentsObj.icon]));
+            }else{
+                subconstruct( contentsObj.param + ': ' + ((Teleport.configparams[contentsObj.param.toString()])?String.fromCodePoint(emojiObj.on):String.fromCodePoint(emojiObj.off)));
             }
-            /*  To use this system, you need to name two Teleportation locations the same
-            *   with only an A and B distinction. For instance Teleport01A and Teleport01B 
-            *   will be linked together. When a token gets on one location, it will be
-            *   Teleported to the other automatically */
+            subconstruct('</a>');
+            return results
+        },
+        // Trying to create a !help function to help players set up teleport tokens. May include a wizard. 
+        // This may include a re-do on how tokens are registered and how they are kitted out.
+        helpDisplay = function(){
             
-            //Finds the current teleportation location
-            var CurrName = "";
+            let output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px">'
+            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;border-bottom:1px solid black;">';
+            output +='Teleport Help';
+            output +='</div>';
+            output +='<p>Teleport is an API script that uses chat menus and chat buttons to manage teleport pads.</p>';
+            output +='<p>This includes creating teleport pads, registering teleport pad destinations, managing general settings,' + 
+                      ' locking pads individually from autoteleporting, and un-linking teleport pad destinations.</p>';
+            output +='<p>Each pad has an individual menu for invoking teleport for a selected token, and for pinging a pad if you cannot locate it on the page.</p>';
+            output +='<p>'+ configButtonBuilder({param:'Main Menu',apicall:'menu',icon:'help'}) +'</p>';
+            output +='</div>';
+            outputToChat(output); 
             
-            var location = findContains(obj,'gmlayer');
-            if (location.length === 0) {
-                return;
-            }
-    
-            
-            let Curr = location[0];
-    
-            if(!CheckLock(Curr,obj)){
-                return;
-            }
-
-            
-            CurrName = Curr.get("name");
-    
-            
-            var Letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L"];
-            
-            //Number of doors in the cycle (second to last character)
-            var doorCount = CurrName.substr(CurrName.length - 2, 1);
-            
-            //Current Letter of the Door
-            var currDoor = CurrName.substr(CurrName.length - 1, 1);
-            //Finds the pair location and moves target to that location
-            
-            var i = 0;
-            
-            if( CurrName.match(/^R:/) ) {
-                i = randomInteger(doorCount)-1;
-            } else {
-                i = Letters.indexOf(currDoor);
+        },
+        menuDisplay = function(){
+            let output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px">'
+            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
+            output +='Main Menu';
+            output +='</div>';
+            output +='<p>Commands in Teleport are always preceded by !teleport.</p>';
+            output +='<p>' + configButtonBuilder({param:'Create Teleport Pad',apicall:'createpad',icon:'teleportall'}) + '</p>';
+            output +='<p>' + configButtonBuilder({param:'Config Panel',apicall:'config',icon:'config'}) + '</p>';
+            output +='<p>' + configButtonBuilder({param:'Teleporter Pad List',apicall:'padlist',icon:'portal'}) + '</p>';
+            output +='</div>';
+            outputToChat(output); 
+        },
+        configDisplay = function(){
+            let output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px;">'
+            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
+            output +='Configuration Menu    ' + emojiButtonBuilder( {param:'Main Menu',apicall:'menu',icon:'help'} ) + '';
+            output +='</div><table style="border:1px solid black;">';
+            _.each(Object.keys(state.teleport.config), function(param){
+                output += '<tr><td style="text-align:right;">' + configButtonBuilder({param:param,apicall:param.toLowerCase()}) + '</td></tr>';
+            });
+            output +='</table></div>';
+            outputToChat(output); 
+        },
+        padDisplay = function(){
+            let output = '',
+            padlist=teleportPadList();
+            output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px">'
+            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
+            output +='Teleport Pad List    ' + emojiButtonBuilder( {param:'Main Menu',apicall:'menu',icon:'help'} ) + '';
+            output +='</div><table style="border:1px solid black;width:100%">';
+            _.each(padlist, function(pad){
+                let targettext = '';
                 
-                if (i === doorCount - 1) {
-                    i = 0;
-                }
-                else {
-                    i = i + 1;
-                }
-            }
-            
-            var NewName = CurrName.substr(0,CurrName.length - 2) + doorCount + Letters[i];
-            
-            var NewX = 0;
-            var NewY = 0;
-            var LocFX = "";
-            
-            var newLocation = findObjs({
-                _pageid: obj.get('pageid'),
-                _type: "graphic",
-                layer: "gmlayer", //target location MUST be on GM layer
-                name: NewName
-            });
-    
-            _.each(newLocation, function(Loc){
-                    //Get the new Location
-                NewX = Loc.get("left");
-                NewY = Loc.get("top");
-                LocFX = unescape(Loc.get('gmnotes')).replace(/<[^>]*>/g,'');
-            });
-            
-            if (NewX === 0 ) {
-                return;
-            }
-            
-            
-            if(LocFX !== '' && LocFX.indexOf("{") !== -1){
-                LocFX = JSON.parse(LocFX); // convert LocFX to an object
-            }
-            let currLayer=obj.get('layer');
-            let character=(obj.get('represents'))?getObj("character", obj.get('represents')):null;
-            let player, follow, oldColor; 
-            var controller = (character)?character.get('controlledby'):'';
-            if(controller !== '' && controller !== 'all' ){
-                player=getObj("player", controller);
-                follow=true;
-            }else{
-                // set player to GM (eventually), and if not "all" set follow to false
-                player=Teleporter.DEFAULTPLAYER;
-                follow=(controller === 'all')?true:false;
-            }
-    
-            // use override for send ping
-            if((!Teleporter.AUTOPINGMOVE && follow) || !follow){
-                follow=false;
-            }else{
-                oldColor=player.get("color");
-                if (Teleporter.HIDEPINGFX){player.set({color:"transparent"});}
-            }
-            
-           
-            obj.set({
-                layer: 'gmlayer'
-            });
-            _.delay(()=>{
-                obj.set({
-                    left: NewX,
-                    top: NewY,
-                    lastmove: ''
-                });
-                _.delay(()=>{
-                    obj.set({
-                        layer: currLayer
-                    });
-                    // Ping only the specified player to this location - (get controlling player, have to account for multiple/"all")
-                    if(follow){sendPing(NewX, NewY, obj.get('pageid'), player.get("_id"), true, player.get("_id"));}
-                    if(LocFX !== '' && Teleporter.AUTOPLAYFX ){
-                        if(_.isString(LocFX)){
-                            spawnFx(NewX, NewY, LocFX, obj.get('pageid'));
-                        }else{
-                            spawnFxWithDefinition(NewX, NewY, LocFX, obj.get('pageid'));
-                        }
+                if(pad.get('bar1_max') !==''){
+                    let targetlist = pad.get('bar1_max');
+                    if(Array.isArray(targetlist)){
+                        let count = 0;
+                        _.each(targetlist, function(targ){
+                            if(count>0){
+                                targettext += ',';
+                            }
+                            targettext += getObj('graphic',targ).get('name');
+                            count++
+                        });
+                    }else{
+                        targettext += getObj('graphic',pad.get('bar1_max')).get('name');
                     }
-                    _.delay(()=>{
-                        // Longer delay to re-set the player color to allow the ping to finish.
-                        if(follow){player.set({color: oldColor});}
-                    },1000);
+                }else{
+                    targettext += 'not linked';
+                }
+                output += '<tr><td style="text-align:left;font-weight:bold;" colspan="5">' + pad.get('name') + '</td></tr>';
+                output += '<tr>'
+                output += '<td>' + emojiButtonBuilder( {param:'Ping Pad',apicall:'pingpad|' + pad.get('_id'),icon:'ping'} ) + '</td>';
+                output += '<td>' + emojiButtonBuilder( {param:'Edit Pad',apicall:'editpad|' + pad.get('_id'),icon:'edit'} ) + '</td>';
+                output += '<td>' + emojiButtonBuilder( {param:'Teleport Token',apicall:'teleporttoken|' + pad.get('_id'),icon:'teleport'} ) + '</td>';
+                if(pad.get('status_dead')){
+                    output += '<td>' + emojiButtonBuilder( {param:'Unlock Pad',apicall:'lockportal|' + pad.get('_id'),icon:'locked'} ) + '</td>';
+                }else{
+                    output += '<td>' + emojiButtonBuilder( {param:'Lock Pad',apicall:'lockportal|' + pad.get('_id'),icon:'unlocked'} ) + '</td>';
+                }
+                output += '<td>' + emojiButtonBuilder( {param:'Link Pad',apicall:'linkpad|' + pad.get('_id'),icon:'linked'} ) + '</td>';
+                output += '</tr>';
+               
+                output += '<tr><td style="text-align:left;border-bottom:1px solid black;" colspan="5"> linked to: ';
+                   output += targettext;
+                output += '</td></tr>';
+            });
+            output +='</table></div>';
+            outputToChat(output); 
+        },
+        editPadDisplay = function(padid){
+            let pad = getObj( "graphic" , padid ), 
+            output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px">'
+            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
+            output +='Pad Edit for ' + pad.get('name') + emojiButtonBuilder( {param:'Teleport Pad List',apicall:'padlist',icon:'portal'} ) + '';
+            output +='</div><table style="border:1px solid black;width:100%">';
+            output += '<tr><td style="text-align:left;font-weight:bold;" colspan="2">' + pad.get('name') + '</td></tr>';
+            output += '<tr><td>Ping</td><td>' + emojiButtonBuilder( {param:'Ping Pad',apicall:'pingpad|' + pad.get('_id'),icon:'ping'} ) + '</td></tr>';
+            output += '<tr><td>SFX:' + ((pad.get('bar2_value') !== '')?pad.get('bar2_value'):'none')
+            let apicall = 'editpdsfx ?{Special Effects Shape|bomb|bubbling|burn|burst|explode|glow|missile|nova|none}-' + 
+            '?{Special Effects Color|acid|blood|charm|death|fire|frost|holy|magic|slime|smoke|water}' + '|' + pad.get('_id');
+            //let apicall = 'editpadsfx ?{Options|Choose one:,&#63;{Choose an option&#124;Try again.&#124;A&#124;B&#124;C&#124;D&#124;E&#124;F&#124;G&#125;|A|B|C|D|E|F|G} |' + pad.get('_id');
+            output += configButtonBuilder({param:'Set Pad SFX',apicall:apicall,icon:'teleportall'}) 
+            output += '</td><td>' + emojiButtonBuilder( {param:'Show SFX',apicall:'showpdsfx|' + pad.get('_id'),icon:'active'} ) + '</td></tr>';
+            output += '<tr><td>Teleport Token To</td><td>' + emojiButtonBuilder( {param:'Teleport Token',apicall:'teleporttoken|' + pad.get('_id'),icon:'teleport'} ) + '</td></tr>';
+            if(pad.get('status_dead')){
+                output += '<tr><td>Status: Locked</td><td>' + emojiButtonBuilder( {param:'Unlock Pad',apicall:'lockpad|' + pad.get('_id'),icon:'locked'} ) + '</td></tr>';
+            }else{
+                output += '<tr><td>Status: Unlocked</td><td>' + emojiButtonBuilder( {param:'Lock Pad',apicall:'lockpad|' + pad.get('_id'),icon:'unlocked'} ) + '</td></tr>';
+            }
+            output += '<tr><td>Link Pad</td><td>' + emojiButtonBuilder( {param:'Link Pad',apicall:'linkpad|' + pad.get('_id'),icon:'linked'} ) + '</td></tr>';
+            output +='';
+            output +='</table></div>';
+            outputToChat(output); 
+        },
+        // This check is exclusively for auto-teleport, and never occurs
+        // for chat-based teleport or teleport buttons. 
+        // This can be useful for temporarily one-way portals for example
+        // Otherwise one-way portals can have no linked portal, meaning they
+        // are only destination portals for auto-teleport. 
+        teleportPadCheck = function(obj){
+            // Checking overlap - any overlap on drop triggers teleport. 
+            // Changing to circle overlap - 
+            //   - Add width and height, divide by 2, divide by 2 again to get average radius
+            //   - Do this for pad and token
+            //   - Check for hypotenuse between two points on right triangle
+            //   - If hypotenuse is greater than radius 1 + radius 2, they are not overlapping.
+            // Disadvantage: not as accurate as square-overlap
+            // Advantage: feels more realistic given that most tokens are not square with transparency.
+            let objrad = (obj.get('width') + obj.get('height'))/4; 
+            
+            var padList = teleportPadList()
+            _.each(padList, function(pad){
+                if(pad.get('status_dead') === true){
+                    return;
+                }
+                let padrad = (pad.get('width') + pad.get('height'))/4,
+                hypot = Math.ceil(Math.sqrt(Math.pow((pad.get('left') - obj.get('left')),2) + Math.pow((pad.get('top') - obj.get('top')),2)));
+                // log("hypot:" + hypot + " | objrad:" + objrad + " | padrad:" + padrad + " | test:" + (hypot < (objrad+padrad)));
+                if(hypot < (objrad+padrad)){
+                    let nextpad = teleportAutoNextTarget(pad);
+                    if(nextpad){
+                        teleportToken({obj:obj,pad:nextpad});
+                    }
+                }else{
+                    return;
+                }
+            });
+        },
+        teleportAutoNextTarget = function(pad){
+            // in case of accidental self-reference, just don't teleport 
+            // this will include the randomizer - thining of whether to include inactivated portals... 
+            if(pad.get('bar1_max') === ''){ return null };
+            let targetlist = pad.get('bar1_max'),pickedpad,count=0,randnum=0;
+            if(Array.isArray(targetlist)){
+                let randnum = Math.floor(Math.random()*targetlist.length);
+                _.each(targetlist, function(targ){
+                    
+                    if(randnum === count){
+                        pickedpad = getObj('graphic',targ);
+                    }
+                    count++;
+                });
+            }else{
+                 pickedpad = getObj('graphic',targetlist);
+            }
+            return pickedpad;
+        },
+        teleportPadList = function(){
+            var currentPageId = Campaign().get('playerpageid');
+            var rawList = findObjs({_subtype:'token',layer:'gmlayer'}),
+            padList = [];
+            _.each(rawList, function(padCheck){
+              if( padCheck.get('bar1_value').indexOf('teleportpad') === 0 && padCheck.get('_pageid') === currentPageId){
+                  padList.push(padCheck);
+              }
+            })
+            return padList;
+        },
+        teleportPad = function(){},
+        teleportToken = function(params){
+            let obj = params.obj, pad = params.pad;
+            obj.set("layer","gmlayer")
+            setTimeout(function(){
+                obj.set("left",pad.get('left'));
+                obj.set("top",pad.get('top'));
+                setTimeout(function(){
+                    obj.set("layer","objects");
+                    if(Teleport.configparams.AUTOPING){
+                        teleportPing({obj:obj,pad:pad});
+                    }
+                    if(Teleport.configparams.SHOWSFX){
+                        teleportSFX({obj:obj,pad:pad});
+                    }
                 },500);
             },100);
-        });
-        
-        
-        
-        
-        on("chat:message", function(msg) {   
-            "use strict";
-            var cmdName = "!Teleport ";
-            if (msg.type === "api" && msg.content.indexOf(cmdName) !== -1 && playerIsGM(msg.playerid)) {
-                var cleanedMsg = msg.content.replace(cmdName, "");
-                var commands = cleanedMsg.split(", ");
-                var targetName = commands[0];
-         
-                var i = 1;
-                // Fires off one command for each entry - meaning multiple SFX and refocus etc. unless ALL
-                while ( i < commands.length ) {
-                    Teleporter.Teleport(commands[i], targetName);
-                    i = i + 1;
-                }
-            }
-            if (msg.content.indexOf("!AUTOTELEPORTER") !== -1 && playerIsGM(msg.playerid)) {
-         
-                if ( Teleporter.AUTOTELEPORTER === true) {
-                    sendChat("System", "/w gm Autoteleporting Disabled.");
-                    Teleporter.AUTOTELEPORTER = false;
-                }
-                else {
-                    sendChat("System", "/w gm Autoteleporting Enabled.");
-                    Teleporter.AUTOTELEPORTER = true;
-                }
-            }
+        },
+        teleportPing = function(params){
+            let obj=params.obj, pad=params.pad, player, oldcolor;
+            // figure out if there is a player attached
+            if(Teleport.configparams.HIDEPING){
+                player = findTokenPlayer({obj:obj,pad:pad});
+                // log("tp:player: " + player);
+                oldcolor = player.get('color');
+                player.set('color','transparent');
             
-            if (msg.content.indexOf("!AUTOPINGMOVE") !== -1 && playerIsGM(msg.playerid)) {
-         
-                if ( Teleporter.AUTOPINGMOVE === true) {
-                    sendChat("System", "/w gm Ping-move Disabled.");
-                    Teleporter.AUTOPINGMOVE = false;
-                }
-                else {
-                    sendChat("System", "/w gm Ping-move Enabled.");
-                    Teleporter.AUTOPINGMOVE = true;
-                }
+                setTimeout(function(){
+                    sendPing(pad.get('left'), pad.get('top'), Campaign().get('playerpageid'), player.id, true, player.id);
+                    setTimeout(function(){
+                        player.set('color',oldcolor);
+                    },1000);
+                },10)
+                
             }
+        },
+        teleportSFX = function(params){
+            let pad = params.pad;
+            if(pad.get('bar2_value') !== ''){
+                setTimeout(function(){
+                    spawnFx(pad.get('left'), pad.get('top'), pad.get('bar2_value'), Campaign().get('playerpageid'));
+                },10);
+            }
+        },
+        teleportMsg = function(params){
             
-            if (msg.content.indexOf("!AUTOPLAYFX") !== -1 && playerIsGM(msg.playerid)) {
-         
-                if ( Teleporter.AUTOPLAYFX === true) {
-                    sendChat("System", "/w gm Auto Play FX Disabled.");
-                    Teleporter.AUTOPLAYFX = false;
+        },
+        findTokenPlayer=function(params){
+            let obj=params.obj,pad=params.pad, character, controller;
+            character=(obj.get('represents'))?getObj("character", obj.get('represents')):null;
+            controller = (character)?character.get('controlledby'):'';
+                if(controller !== '' && controller !== 'all' ){
+                    player=getObj("player", controller);
+                }else{
+                    player=DEFAULTPLAYER;
                 }
-                else {
-                    sendChat("System", "/w gm Auto Play FX Enabled.");
-                    Teleporter.AUTOPLAYFX = true;
+            return player
+        },
+        addPortalPadLink = function(params){
+            let pad=params.pad,linktargetids=params.linktargetids,completelinklist=[];
+            _.each(linktargetids, function(linktarg){
+                if(pad.get('_id') === linktarg._id){
+                    outputToChat("A portal pad cannot target itself.");
+                    return
+                }
+                let obj = getObj('graphic',linktarg._id);
+                    if(obj.get('bar1_value') === 'teleportpad'){
+                           completelinklist.push(obj.get('_id'));
+                    }else{
+                    outputToChat("A Link target for autoteleport needs to also be a teleport pad.");
+                }
+            });
+            pad.set("bar1_max",completelinklist);
+        },
+        editPadSFX = function(params){
+            let pad = getObj('graphic',params.pad), sfx=params.sfx;
+            if(sfx && sfx.indexOf('none') !== -1){
+               sfx=''; 
+            }
+            pad.set('bar2_value',sfx);
+            editPadDisplay(pad.get('_id'));
+        },
+        showPadSFX = function(params){
+            let pad = getObj('graphic',params.pad);
+            if(pad.get('bar2_value') !== ''){
+                // log(pad.get('bar2_value'));
+                spawnFx(pad.get('left'), pad.get('top'), pad.get('bar2_value'), Campaign().get('playerpageid'));
+            }
+        }
+        msgHandler = function(msg){
+            
+            if(msg.type === 'api' && msg.content.indexOf('!teleport') === 0 ){
+                if(msg.content.indexOf('--help') !== -1){
+                    helpDisplay();
+                }
+                if(msg.content.indexOf('--menu') !== -1){
+                    menuDisplay();
+                }
+                if(msg.content.indexOf('--config') !== -1){
+                    configDisplay();
+                }
+                if(msg.content.indexOf('--padlist') !== -1){
+                    padDisplay();
+                }
+                
+                if(msg.content.indexOf('--teleporttoken') !== -1){ 
+                    if(typeof msg.selected !== 'undefined'){
+                        let pad = getObj('graphic',msg.content.split('|')[1]);
+                        let obj = getObj('graphic',msg.selected[0]._id);
+                        teleportToken({obj:obj,pad:pad});
+                    }else{
+                        outputToChat("Select a target token to teleport before clicking teleport.");
+                    }
+                }
+                if(msg.content.indexOf('--linkpad') !== -1){ 
+                    let pad = getObj('graphic',msg.content.split('|')[1]);
+                    if(typeof msg.selected !== 'undefined'){
+                        addPortalPadLink({pad:pad,linktargetids:msg.selected});
+                    }else{
+                        outputToChat("Clicking Link without selecting a token clears the teleport pad link.");
+                        pad.set("bar1_max","");
+                    }
+                    padDisplay();
+                }
+                
+                if(msg.content.indexOf('--createpad') !== -1){
+                    if(typeof msg.selected ==='undefined'){
+                        return outputToChat('Select a token to be the teleport pad.');
+                    }
+                    let pad = getObj('graphic',msg.selected[0]._id);
+                    if(pad.get('_subtype') === 'card'){outputToChat("Select a target token that is not a card.")}
+                    pad.set({
+                        layer:'gmlayer',
+                        bar1_value:'teleportpad',
+                        name: ((pad.get('name') === "")?'Telepad ' + state.teleport.increment++:pad.get('name')),
+                        showname: true
+                    })
+                    padDisplay();
+                }
+                if(msg.content.indexOf('--editpad') !== -1){
+                    editPadDisplay(msg.content.split('|')[1]);
+                }
+                if(msg.content.indexOf('--editpdsfx') !== -1){
+                    log(msg.content);
+                    editPadSFX( {pad:msg.content.split('|')[1],sfx:msg.content.split('|')[0].split(' ')[2]} );
+                }
+                if(msg.content.indexOf('--showpdsfx') !== -1){
+                    log(msg.content);
+                    showPadSFX({pad:msg.content.split('|')[1]});
+                }
+                if(msg.content.indexOf('--lockportal') !== -1){
+                        let pad = getObj('graphic',msg.content.split('|')[1]);
+                        let currentstatus = pad.get('status_dead');
+                        pad.set('status_dead', (currentstatus)?false:true);
+                        padDisplay();
+                }
+                if(msg.content.indexOf('--lockpad') !== -1){
+                        let pad = getObj('graphic',msg.content.split('|')[1]);
+                        let currentstatus = pad.get('status_dead');
+                        pad.set('status_dead', (currentstatus)?false:true);
+                        editPadDisplay(msg.content.split('|')[1]);
+                }
+                
+                if(msg.content.indexOf('--pingpad') !== -1){
+                        let pad = getObj('graphic',msg.content.split('|')[1]);
+                        setTimeout(function() {
+                            sendPing(pad.get('left'), pad.get('top'), Campaign().get('playerpageid'), null, true, DEFAULTPLAYER.get('_id'));
+                        }, 10);
+                }
+                if(msg.content.indexOf('--autoteleport') !== -1){
+                    Teleport.configparams.AUTOTELEPORT = (Teleport.configparams.AUTOTELEPORT)?false:true;
+                    setStateParam('AUTOTELEPORT',Teleport.configparams.AUTOTELEPORT);
+                    configDisplay();
+                }else if(msg.content.indexOf('--autoping') !== -1){
+                    Teleport.configparams.AUTOPING = (Teleport.configparams.AUTOPING)?false:true;
+                    setStateParam('AUTOPING',Teleport.configparams.AUTOPING);
+                    configDisplay();
+                }else if(msg.content.indexOf('--hideping') !== -1){
+                    Teleport.configparams.HIDEPING = (Teleport.configparams.HIDEPING)?false:true;
+                    setStateParam('HIDEPING',Teleport.configparams.HIDEPING);
+                    configDisplay();
+                }else if(msg.content.indexOf('--showsfx') !== -1){
+                    Teleport.configparams.SHOWSFX = (Teleport.configparams.SHOWSFX)?false:true;
+                    setStateParam('SHOWSFX',Teleport.configparams.SHOWSFX);
+                    configDisplay();
                 }
             }
-            if (msg.content.indexOf("!HIDEPINGFX") !== -1 && playerIsGM(msg.playerid)) {
-         
-                if ( Teleporter.HIDEPINGFX === true) {
-                    sendChat("System", "/w gm Hide Ping FX Disabled.");
-                    Teleporter.HIDEPINGFX = false;
-                }
-                else {
-                    sendChat("System", "/w gm Hide Ping FX Enabled.");
-                    Teleporter.HIDEPINGFX = true;
-                }
-            }
-        }); 
         
-        return {
-            AUTOTELEPORTER: true,   // Set to true if you want teleports to be linked
-            AUTOPINGMOVE: true,     // Set to true if you want individual auto-teleports/teleports to also move the view.
-            AUTOPLAYFX: true,       // Set to true if you want FX to play for teleport targets. 
-                                    //   - Still checks for FX before playing. False turns all off.
-            HIDEPINGFX: true,         // Set to true if you want the ping FX to be hidden, turn false for visible ping FX
-                                    // Run this onece to get a player object for the GM for "default" pings for "all" 
-            DEFAULTPLAYER:  (function(){
+        },
+        outputToChat = function(msg){
+            sendChat('system','/w gm ' + msg,null,{noarchive:true});
+        },
+        autoTeleportCheck = function(obj){
+            if(Teleport.configparams.AUTOTELEPORT===false){
+                return;
+            }
+            if(obj.get('_subtype') === "token" && obj.get('lastmove') !== '' && obj.get('layer') !== 'gmlayer' ){
+                teleportPadCheck(obj);
+            }
+        },
+        RegisterEventHandlers = function() {
+            on('chat:message', msgHandler);
+            on('change:graphic', autoTeleportCheck);
+            DEFAULTPLAYER = (function(){
                                 let player;
                                 let playerlist = findObjs({                              
                                       _type: "player",                          
@@ -474,11 +473,23 @@ on('ready',() => {
                                   };
                                 });
                                 return player;
-                            })(),
-            Teleport: Teleport
+                            })();
+            helpDisplay();
+        };     
+        
+        return {
+            startup: RegisterEventHandlers,
+            configparams: {
+                "AUTOTELEPORT": AUTOTELEPORT,
+                "AUTOPING": AUTOPING,
+                "HIDEPING": HIDEPING,
+                "SHOWSFX": SHOWSFX
+            }
         }
         
-    }();
-    
+    }());
 
+
+on('ready',() => {    
+    Teleport.startup();
 });
