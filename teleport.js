@@ -10,6 +10,9 @@
                 - causing GM layer creatures to appear with pings and effects
                 - anything else you can think of for the tools this provides. 
         */
+        var version = '0.9 Alpha Release',
+            author = 'Gritmonger',
+            lastModified = 1604783535334
         // DEFAULTPLAYER is used for pings where a controlled by lists "all"
         // and for other situations where a GM might want to ping all. 
         state.teleport = state.teleport || {};
