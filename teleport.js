@@ -317,6 +317,9 @@
             var rawList = findObjs({_subtype:'token',layer:'gmlayer'}),
             padList = [];
             _.each(rawList, function(padCheck){
+              if(typeof padCheck.get('bar1_value') !== 'string'){
+                  return;
+              }
               if( padCheck.get('bar1_value').indexOf('teleportpad') === 0 && padCheck.get('_pageid') === currentPageId){
                   padList.push(padCheck);
               }
