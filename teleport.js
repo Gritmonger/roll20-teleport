@@ -63,8 +63,8 @@
         configButtonStyles = 'width:150px;background-color:white;color:black;font-size:.9em;',
         emojiButtonStyles = 'width:18px;height:18px;background-color:#efefef;color:black;font-size:1em',
         emojiButtonBuilder = function(contentsObj){
-            var subconstruct = function(txt){results += txt},
-            results = '<a title="'+ contentsObj.param + '" href="!teleport --';
+            let results = '<a title="'+ contentsObj.param + '" href="!teleport --',
+            subconstruct = txt => results += txt;
             subconstruct( contentsObj.apicall );
             subconstruct('" style="' );
             subconstruct( defaultButtonStyles + emojiButtonStyles + '">');
@@ -77,8 +77,8 @@
             return results
         },
         configButtonBuilder = function(contentsObj){
-            var subconstruct = function(txt){results += txt},
-            results = '<a href="!teleport --';
+            let results = '<a href="!teleport --',
+            subconstruct = txt => results += txt;
             subconstruct( contentsObj.apicall );
             subconstruct('" style="background-color:white' );
             subconstruct(';color:black;' + defaultButtonStyles + configButtonStyles + '">');
