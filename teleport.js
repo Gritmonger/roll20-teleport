@@ -53,7 +53,9 @@
             'unlocked':0x1F7E2,
             'ping':0x1F50E,
             'menu':0x1F53C,
-            'pad':0x1F4AB
+            'pad':0x1F4AB,
+            'editname':0x1F4DD,
+            'message':0x1F4AD
         },
         defaultButtonStyles = 'border:1px solid black;border-radius:.5em;padding:2px;margin:2px;font-weight:bold;font-size:.9em;text-align:right;',
         configButtonStyles = 'width:150px;background-color:white;color:black;',
@@ -174,29 +176,81 @@
             outputToChat(output); 
         },
         editPadDisplay = function(padid){
-            let pad = getObj( "graphic" , padid ), 
+            let pad = getObj( "graphic" , padid ),
+            targettext = '',
+            output = ''
+            if(pad.get('bar1_max') !==''){
+                let targetlist = pad.get('bar1_max');
+                if(Array.isArray(targetlist)){
+                    let count = 0;
+                    _.each(targetlist, function(targ){
+                        if(count>0){
+                            targettext += ',';
+                        }
+                        targettext += getObj('graphic',targ).get('name');
+                        count++
+                    });
+                }else{
+                    targettext += getObj('graphic',pad.get('bar1_max')).get('name');
+                }
+            }else{
+                targettext += 'not linked';
+            }
             output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px">'
             +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
             output +='Pad Edit for ' + pad.get('name') + emojiButtonBuilder( {param:'Teleport Pad List',apicall:'padlist',icon:'portal'} ) + '';
             output +='</div><table style="border:1px solid black;width:100%">';
-            output += '<tr><td style="text-align:left;font-weight:bold;" colspan="2">' + pad.get('name') + '</td></tr>';
+            output += '<tr><td style="text-align:left;font-weight:bold;">' + pad.get('name') + '</td><td>' + emojiButtonBuilder( {param:'Rename Token',apicall:'renamepad ?{Pad Name|'+ pad.get('name') +'}|' + pad.get('_id'), icon:'editname'} ) + '</td></tr>';
             output += '<tr><td>Ping</td><td>' + emojiButtonBuilder( {param:'Ping Pad',apicall:'pingpad|' + pad.get('_id'),icon:'ping'} ) + '</td></tr>';
             output += '<tr><td>SFX:' + ((pad.get('bar2_value') !== '')?pad.get('bar2_value'):'none')
-            let apicall = 'editpdsfx ?{Special Effects Shape|bomb|bubbling|burn|burst|explode|glow|missile|nova|none}-' + 
+            let sfxapicall = 'editpdsfx ?{Special Effects Shape|bomb|bubbling|burn|burst|explode|glow|missile|nova|none}-' + 
             '?{Special Effects Color|acid|blood|charm|death|fire|frost|holy|magic|slime|smoke|water}' + '|' + pad.get('_id');
             //let apicall = 'editpadsfx ?{Options|Choose one:,&#63;{Choose an option&#124;Try again.&#124;A&#124;B&#124;C&#124;D&#124;E&#124;F&#124;G&#125;|A|B|C|D|E|F|G} |' + pad.get('_id');
-            output += configButtonBuilder({param:'Set Pad SFX',apicall:apicall,icon:'teleportall'}) 
+            output += configButtonBuilder({param:'Set Pad SFX',apicall:sfxapicall,icon:'teleportall'}) 
             output += '</td><td>' + emojiButtonBuilder( {param:'Show SFX',apicall:'showpdsfx|' + pad.get('_id'),icon:'active'} ) + '</td></tr>';
+            //
+            
+            output += '<tr><td>Message:' + ((pad.get('bar2_max') !== '')?pad.get('bar2_max'):'none');
+            let msgapicall = 'editpdmsg ?{Activation Message|' + ((pad.get('bar2_max') !== '')?pad.get('bar2_max'):'none') + '}' + '|' + pad.get('_id');
+            //let apicall = 'editpadsfx ?{Options|Choose one:,&#63;{Choose an option&#124;Try again.&#124;A&#124;B&#124;C&#124;D&#124;E&#124;F&#124;G&#125;|A|B|C|D|E|F|G} |' + pad.get('_id');
+            output += configButtonBuilder({param:'Set Pad Message',apicall:msgapicall,icon:'message'}) 
+            output += '</td><td>' + emojiButtonBuilder( {param:'Show Message',apicall:'showpdmsg|' + pad.get('_id'),icon:'message'} ) + '</td></tr>';
+            
+            //
             output += '<tr><td>Teleport Token To</td><td>' + emojiButtonBuilder( {param:'Teleport Token',apicall:'teleporttoken|' + pad.get('_id'),icon:'teleport'} ) + '</td></tr>';
             if(pad.get('status_dead')){
                 output += '<tr><td>Status: Locked</td><td>' + emojiButtonBuilder( {param:'Unlock Pad',apicall:'lockpad|' + pad.get('_id'),icon:'locked'} ) + '</td></tr>';
             }else{
                 output += '<tr><td>Status: Unlocked</td><td>' + emojiButtonBuilder( {param:'Lock Pad',apicall:'lockpad|' + pad.get('_id'),icon:'unlocked'} ) + '</td></tr>';
             }
+            if(pad.get('fliph')){
+                output += '<tr><td>Multi-Link: Select</td><td>' + emojiButtonBuilder( {param:'Set Random Pad',apicall:'selectpadset|' + pad.get('_id'),icon:'locked'} ) + '</td></tr>';
+            }else{
+                output += '<tr><td>Multi-Link: Random</td><td>' + emojiButtonBuilder( {param:'Set Select Pad',apicall:'selectpadset|' + pad.get('_id'),icon:'unlocked'} ) + '</td></tr>';
+            }
             output += '<tr><td>Link Pad</td><td>' + emojiButtonBuilder( {param:'Link Pad',apicall:'linkpad|' + pad.get('_id'),icon:'linked'} ) + '</td></tr>';
-            output +='';
+            output += '<tr><td style="text-align:left;border-bottom:1px solid black;" colspan="2"> linked to: ';
+               output += targettext;
+            output += '</td></tr>';
             output +='</table></div>';
             outputToChat(output); 
+        },
+        teleportSelectList = function(params){
+            let pad=params.pad,obj=params.obj;
+            let returntext = '?{Select a Destination';
+            if(pad.get('bar1_max') !==''){
+                let targetlist = pad.get('bar1_max');
+                if(Array.isArray(targetlist)){
+                    _.each(targetlist, function(targ){
+                        returntext += '|' + getObj('graphic',targ).get('name') + ',' + getObj('graphic',targ).get('_id');
+                    });
+                    returntext += '}';
+                }
+            }
+            let player = findTokenPlayer({pad:pad,obj:obj});
+            log(player.get('_displayname'));
+            outputToChat(configButtonBuilder( {param:'Select Destination',apicall:'teleporttoken|' + returntext,icon:'teleport'} ), player.get('_displayname'));
+            // outputToChat('!teleport --teleporttoken|' + returntext);
         },
         // This check is exclusively for auto-teleport, and never occurs
         // for chat-based teleport or teleport buttons. 
@@ -214,7 +268,7 @@
             // Advantage: feels more realistic given that most tokens are not square with transparency.
             let objrad = (obj.get('width') + obj.get('height'))/4; 
             
-            var padList = teleportPadList()
+            var padList = teleportPadList();
             _.each(padList, function(pad){
                 if(pad.get('status_dead') === true){
                     return;
@@ -223,6 +277,11 @@
                 hypot = Math.ceil(Math.sqrt(Math.pow((pad.get('left') - obj.get('left')),2) + Math.pow((pad.get('top') - obj.get('top')),2)));
                 // log("hypot:" + hypot + " | objrad:" + objrad + " | padrad:" + padrad + " | test:" + (hypot < (objrad+padrad)));
                 if(hypot < (objrad+padrad)){
+                    let targetlist = pad.get('bar1_max');
+                    if(Array.isArray(targetlist) && pad.get('fliph') === true){
+                        teleportSelectList({pad:pad,obj:obj});
+                        return;
+                    }
                     let nextpad = teleportAutoNextTarget(pad);
                     if(nextpad){
                         teleportToken({obj:obj,pad:nextpad});
@@ -307,7 +366,10 @@
             }
         },
         teleportMsg = function(params){
-            
+            let pad = params.pad;
+            if(pad.get('bar2_max') !== ''){
+                
+            }
         },
         findTokenPlayer=function(params){
             let obj=params.obj,pad=params.pad, character, controller;
@@ -350,7 +412,21 @@
                 // log(pad.get('bar2_value'));
                 spawnFx(pad.get('left'), pad.get('top'), pad.get('bar2_value'), Campaign().get('playerpageid'));
             }
-        }
+        },
+        editPadMsg = function(params){
+            let pad = getObj('graphic',params.pad), msg=params.msg;
+            if(msg && msg.indexOf('none') !== -1){
+               msg=''; 
+            }
+            pad.set('bar2_max',msg);
+            editPadDisplay(pad.get('_id'));
+        },
+        showPadMsg = function(params){
+            let pad = getObj('graphic',params.pad);
+            if(pad.get('bar2_max') !== ''){
+                outputToChat(pad.get('bar2_max'));
+            }
+        },
         msgHandler = function(msg){
             
             if(msg.type === 'api' && msg.content.indexOf('!teleport') === 0 ){
@@ -402,6 +478,14 @@
                     })
                     padDisplay();
                 }
+                if(msg.content.indexOf('--renamepad') !== -1){
+                    let pad = getObj('graphic',msg.content.split('|')[1]);
+                    pad.set({
+                        name: msg.content.split('|')[0].split('--renamepad ')[1]
+                    })
+                    editPadDisplay(msg.content.split('|')[1]);
+                }
+                
                 if(msg.content.indexOf('--editpad') !== -1){
                     editPadDisplay(msg.content.split('|')[1]);
                 }
@@ -413,6 +497,17 @@
                     log(msg.content);
                     showPadSFX({pad:msg.content.split('|')[1]});
                 }
+                
+                if( msg.content.indexOf('--editpdmsg') !== -1){
+                    log(msg.content);
+                    editPadMsg( { pad:msg.content.split('|')[1], msg:msg.content.split('|')[0].split('--editpdmsg ')[1]} );
+                }
+                
+                if(msg.content.indexOf('--showpdmsg') !== -1){
+                    log(msg.content);
+                    showPadMsg({pad:msg.content.split('|')[1]});
+                }
+                
                 if(msg.content.indexOf('--lockportal') !== -1){
                         let pad = getObj('graphic',msg.content.split('|')[1]);
                         let currentstatus = pad.get('status_dead');
@@ -425,7 +520,12 @@
                         pad.set('status_dead', (currentstatus)?false:true);
                         editPadDisplay(msg.content.split('|')[1]);
                 }
-                
+                if(msg.content.indexOf('--selectpadset') !== -1){
+                    let pad = getObj('graphic',msg.content.split('|')[1]);
+                        let currentstatus = pad.get('fliph');
+                        pad.set('fliph', (currentstatus)?false:true);
+                        editPadDisplay(msg.content.split('|')[1]);
+                }
                 if(msg.content.indexOf('--pingpad') !== -1){
                         let pad = getObj('graphic',msg.content.split('|')[1]);
                         setTimeout(function() {
@@ -452,8 +552,15 @@
             }
         
         },
-        outputToChat = function(msg){
-            sendChat('system','/w gm ' + msg,null,{noarchive:true});
+        outputToChat = function(msg,tgt){
+            tgt = (tgt !== undefined && tgt !== null)?tgt:'gm';
+            sendChat('system','/w "' + tgt + '" ' + msg,null,{noarchive:true});
+        },
+        outputOpenMessage = function(params){
+            let msg=params.msg,obj=params.obj,pad=params.pad, formattedmessage='';
+            msg = msg.replace('[target]',obj.get('name'));
+            formattedmessage = '<div><div>' + msg + '</div></div>';
+            sendChat('Environment', formattedmessage);
         },
         autoTeleportCheck = function(obj){
             if(Teleport.configparams.AUTOTELEPORT===false){
