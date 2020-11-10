@@ -55,11 +55,13 @@
             'menu':0x1F53C,
             'pad':0x1F4AB,
             'editname':0x1F4DD,
-            'message':0x1F4AD
+            'message':0x1F4AD,
+            'random':0x1F500,
+            'select':0x1F520
         },
-        defaultButtonStyles = 'border:1px solid black;border-radius:.5em;padding:2px;margin:2px;font-weight:bold;font-size:.9em;text-align:right;',
-        configButtonStyles = 'width:150px;background-color:white;color:black;',
-        emojiButtonStyles = 'width:15px;height:15px;background-color:#efefef;color:black;',
+        defaultButtonStyles = 'border:1px solid black;border-radius:.5em;padding:2px;margin:2px;font-weight:bold;text-align:right;',
+        configButtonStyles = 'width:150px;background-color:white;color:black;font-size:.9em;',
+        emojiButtonStyles = 'width:18px;height:18px;background-color:#efefef;color:black;font-size:1em',
         emojiButtonBuilder = function(contentsObj){
             var subconstruct = function(txt){results += txt},
             results = '<a title="'+ contentsObj.param + '" href="!teleport --';
@@ -224,9 +226,9 @@
                 output += '<tr><td>Status: Unlocked</td><td>' + emojiButtonBuilder( {param:'Lock Pad',apicall:'lockpad|' + pad.get('_id'),icon:'unlocked'} ) + '</td></tr>';
             }
             if(pad.get('fliph')){
-                output += '<tr><td>Multi-Link: Select</td><td>' + emojiButtonBuilder( {param:'Set Random Pad',apicall:'selectpadset|' + pad.get('_id'),icon:'locked'} ) + '</td></tr>';
+                output += '<tr><td>Multi-Link: Select</td><td>' + emojiButtonBuilder( {param:'Set Random Pad',apicall:'selectpadset|' + pad.get('_id'),icon:'select'} ) + '</td></tr>';
             }else{
-                output += '<tr><td>Multi-Link: Random</td><td>' + emojiButtonBuilder( {param:'Set Select Pad',apicall:'selectpadset|' + pad.get('_id'),icon:'unlocked'} ) + '</td></tr>';
+                output += '<tr><td>Multi-Link: Random</td><td>' + emojiButtonBuilder( {param:'Set Select Pad',apicall:'selectpadset|' + pad.get('_id'),icon:'random'} ) + '</td></tr>';
             }
             output += '<tr><td>Link Pad</td><td>' + emojiButtonBuilder( {param:'Link Pad',apicall:'linkpad|' + pad.get('_id'),icon:'linked'} ) + '</td></tr>';
             output += '<tr><td style="text-align:left;border-bottom:1px solid black;" colspan="2"> linked to: ';
