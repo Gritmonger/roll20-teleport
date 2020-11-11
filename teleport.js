@@ -34,6 +34,7 @@
         AUTOPING = getStateParam("AUTOPING",true),
         HIDEPING = getStateParam("HIDEPING",true),
         SHOWSFX = getStateParam("SHOWSFX",true),
+        PLAYERINDEX = {},
         // The emojiObj is used to store the graphics used for config buttons and activation buttons
         emojiObj = { 
             'on': 0x2705,
@@ -279,6 +280,7 @@
                 hypot = Math.ceil(Math.sqrt(Math.pow((pad.get('left') - obj.get('left')),2) + Math.pow((pad.get('top') - obj.get('top')),2)));
                 // log("hypot:" + hypot + " | objrad:" + objrad + " | padrad:" + padrad + " | test:" + (hypot < (objrad+padrad)));
                 if(hypot < (objrad+padrad)){
+                    teleportMsg({pad:pad,tgt:obj});
                     let targetlist = pad.get('bar1_max');
                     if(Array.isArray(targetlist) && pad.get('fliph') === true){
                         teleportSelectList({pad:pad,obj:obj});
@@ -371,9 +373,10 @@
             }
         },
         teleportMsg = function(params){
-            let pad = params.pad;
+            let pad = params.pad, tgt=params.tgt, msg='';
             if(pad.get('bar2_max') !== ''){
-                
+                msg = pad.get('bar2_max').replace('[target]',tgt.get('name'));
+                outputOpenMessage(msg);
             }
         },
         findTokenPlayer=function(params){
@@ -561,9 +564,7 @@
             tgt = (tgt !== undefined && tgt !== null)?tgt:'gm';
             sendChat('system','/w "' + tgt + '" ' + msg,null,{noarchive:true});
         },
-        outputOpenMessage = function(params){
-            let msg=params.msg,obj=params.obj,pad=params.pad, formattedmessage='';
-            msg = msg.replace('[target]',obj.get('name'));
+        outputOpenMessage = function(msg,tgt){
             formattedmessage = '<div><div>' + msg + '</div></div>';
             sendChat('Environment', formattedmessage);
         },
