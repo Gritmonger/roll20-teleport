@@ -430,9 +430,10 @@
             editPadDisplay(pad.get('_id'));
         },
         showPadMsg = function(params){
-            let pad = getObj('graphic',params.pad);
+            let pad = params.pad,tgt=params.obj;
             if(pad.get('bar2_max') !== ''){
-                outputToChat(pad.get('bar2_max'));
+                msg = pad.get('bar2_max').replace('[target]',tgt.get('name'));
+                outputToChat(msg);
             }
         },
         msgHandler = function(msg){
@@ -512,8 +513,13 @@
                 }
                 
                 if(msg.content.indexOf('--showpdmsg') !== -1){
-                    log(msg.content);
-                    showPadMsg({pad:msg.content.split('|')[1]});
+                     if(typeof msg.selected !== 'undefined'){
+                        let pad = getObj('graphic',msg.content.split('|')[1]);
+                        let obj = getObj('graphic',msg.selected[0]._id);
+                        showPadMsg({pad:pad,obj:obj});
+                    }else{
+                       return outputToChat('Select a target token to test the teleport pad message.');
+                    }
                 }
                 
                 if(msg.content.indexOf('--lockportal') !== -1){
