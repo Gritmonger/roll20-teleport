@@ -35,6 +35,7 @@
         HIDEPING = getStateParam("HIDEPING",true),
         SHOWSFX = getStateParam("SHOWSFX",true),
         PLAYERINDEX = {},
+        TOKENMARKERS,
         // The emojiObj is used to store the graphics used for config buttons and activation buttons
         emojiObj = { 
             'on': [0x2714,0xFE0F],
@@ -78,6 +79,7 @@
         emojiButtonStyles = 'width:1.4em;height:1.4em;background-color:#efefef;color:black;font-size:1em;line-height:1.4em;padding:none;font-family:Arial;',
         headingAreaStyles = 'background-color:black;color:white;font-size:1.1em;font-weight:normal;font-family:Candal;padding:.1em .1em .2em .2em;border-radius:.2em;line-height:2em;',
         boundingBoxStyles = 'border: 1px solid black; background-color: white; padding: .2em .2em;margin-top:20px;border-radius:.1em;',
+        tokenButtonStyles = 'border: 1px solid #ccc;',
         tableCellStyles = '',
         emojiButtonBuilder = function(contentsObj){
             let results = '<a title="'+ contentsObj.param + '" href="!teleport --',
@@ -118,6 +120,16 @@
             }else{
                 subconstruct( contentsObj.param + ' ' + ((Teleport.configparams[contentsObj.param.toString()])?emojibuilder('on'):emojibuilder('off')));
             }
+            subconstruct('</a>');
+            return results
+        },
+        tokenButtonBuilder = function(pad,token,status){
+            // this will get a token reference
+            let results = '<a ' + ((status)?'aria-checked="true"':'aria-checked="false"') + ' style="' + tokenButtonStyles + ((status)?'background-color:#999;':'background-color:white;') + '" href="!teleport --editpdkey|',
+            subconstruct = txt => results += txt;
+            subconstruct(pad.get('_id'));
+            subconstruct('|' + token.name + '">');
+            subconstruct(renderTokens(token));
             subconstruct('</a>');
             return results
         },
@@ -255,6 +267,7 @@
             output += standardButtonBuilder({param:'Set Pad Message',apicall:msgapicall,icon:'message'}) 
             output += '</td></tr>';
             
+            output += '<tr><td><div style="float:left;">Keys:</div>' + renderTokenList(getTokens(pad)) + '</td><td>' + emojiButtonBuilder( {param:'Show Keys',apicall:'showpdkeys|' + pad.get('_id'),icon:'key'} ) + '</td></tr>';
             //
             output += '<tr><td>Teleport Token To</td><td>' + emojiButtonBuilder( {param:'Teleport Token',apicall:'teleporttoken|' + pad.get('_id'),icon:'teleport'} ) + '</td></tr>';
             if(pad.get('status_dead')){
@@ -269,10 +282,62 @@
             }
             output += '<tr><td>Link Pad</td><td>' + emojiButtonBuilder( {param:'Link Pad',apicall:'linkpad|' + pad.get('_id'),icon:'linked'} ) + '</td></tr>';
             output += '<tr><td style="text-align:left;border-bottom:1px solid black;" colspan="2"> linked to: ';
-               output += targettext;
+            output += targettext;
             output += '</td></tr>';
             output +='</table></div>';
             outputToChat(output); 
+        },
+        editPadTokenDisplay = function(padid){
+            let pad = getObj( "graphic" , padid ),
+            tokenlist = [],
+            output = '';
+            output = ' <div style="' + boundingBoxStyles + '">'
+            + '<div style="' + headingAreaStyles + '">';
+            output +='<table style="padding: none;"><tr><td width="90%">Pad Keys Edit</td><td>' + emojiButtonBuilder( {param:'Edit Pad',apicall:'editpad|' + pad.get('_id'),icon:'edit'} ) + '</td></tr></table>';
+            output +='</div><table style="border:1px solid black;width:100%">';
+            output +='<tr>';
+            output += '<td ">';
+            output += getAllTokensSelect(getTokens(pad,true),pad); 
+            output += '</td>';
+            output += '</tr></table></div>';
+            outputToChat(output);
+        },
+        getTokens = function(obj, mode){
+            let stringtokenlist = obj.get("statusmarkers").split(','), results=[],chatMessage='';
+            _.each(TOKENMARKERS, tokenmarker =>{
+               _.each(stringtokenlist, marker => {
+                    if(tokenmarker.name.toLowerCase() === marker) results.push(tokenmarker);
+                });
+           });
+           return results;
+        },
+        renderTokenList = function(results, mode){
+            let msg='';
+            _.each(results, marker => {
+                msg += renderTokens(marker, mode);
+            });
+            return msg;
+        }
+        getAllTokensSelect = function(tokenset, pad){
+            let outputtext = '';
+            _.each(TOKENMARKERS, tokenmarker =>{
+                let isactive = false;
+               _.each(tokenset, marker => {
+                    if(tokenmarker.name.toLowerCase() === marker.name) {
+                        isactive = true;//results.push(tokenmarker);
+                        // log("Found to be True for " + tokenmarker.name.toLowerCase() + ":" + marker);
+                    }
+                });
+                
+                outputtext += tokenButtonBuilder(pad, tokenmarker, isactive);//"render Token Button (active is true or false)";
+           });
+           return outputtext;
+        },
+        renderTokens = function(token,mode){
+            let returnText =  '<div style="width:20px;height:20px;float:left;margin:.3em;"><img src="' + token.url + '" alt="' + token.name + '" style="width:100%;height:100%;object-fit:contain;'; 
+                // returnText += ((mode)?'border-radius:50%;background-color:#ccc;':'');
+                returnText += '"></div>';
+            return returnText;
         },
         teleportSelectList = function(params){
             let pad=params.pad,obj=params.obj;
@@ -533,7 +598,6 @@
                     })
                     editPadDisplay(msg.content.split('|')[1]);
                 }
-                
                 if(msg.content.indexOf('--editpad') !== -1){
                     editPadDisplay(msg.content.split('|')[1]);
                 }
@@ -584,6 +648,26 @@
                         setTimeout(function() {
                             sendPing(pad.get('left'), pad.get('top'), Campaign().get('playerpageid'), null, true, DEFAULTPLAYER.get('_id'));
                         }, 10);
+                }
+                if(msg.content.indexOf('--showpdkeys') !== -1){
+                        // let pad = getObj('graphic',msg.content.split('|')[1]);
+                        editPadTokenDisplay(msg.content.split('|')[1]);
+                }
+                if(msg.content.indexOf('--editpdkey') !== -1){
+                    let markerName = msg.content.split('|')[2].toLowerCase(),
+                    padID = msg.content.split('|')[1],
+                    currentmarkers;
+                    
+                    obj = getObj("graphic", padID );
+                    currentMarkers = obj.get("statusmarkers").split(',');
+                    // I have to check if it's there - if it is, remove it, if it isn't, add it.
+                    if(_.indexOf(currentMarkers, markerName) !== -1){
+                        currentMarkers = _.without(currentMarkers, markerName)
+                    }else{
+                        currentMarkers.push(markerName);
+                    }
+                    obj.set("statusmarkers", currentMarkers.join(','));
+                    editPadTokenDisplay(msg.content.split('|')[1]);
                 }
                 if(msg.content.indexOf('--autoteleport') !== -1){
                     Teleport.configparams.AUTOTELEPORT = (Teleport.configparams.AUTOTELEPORT)?false:true;
@@ -636,6 +720,8 @@
                                 });
                                 return player;
                             })();
+            TOKENMARKERS = JSON.parse(Campaign().get("token_markers"));
+   
             helpDisplay();
         };     
         
