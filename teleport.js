@@ -10,7 +10,7 @@
                 - causing GM layer creatures to appear with pings and effects
                 - anything else you can think of for the tools this provides. 
         */
-        var version = '0.9 Alpha Release',
+        var version = '1.0 Beta Release',
             author = 'Gritmonger',
             lastModified = 1604783535334
         // DEFAULTPLAYER is used for pings where a controlled by lists "all"
