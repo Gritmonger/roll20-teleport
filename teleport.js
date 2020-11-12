@@ -37,12 +37,12 @@
         PLAYERINDEX = {},
         // The emojiObj is used to store the graphics used for config buttons and activation buttons
         emojiObj = { 
-            'on': 0x2705,
+            'on': [0x2714,0xFE0F],
             'off': 0x274C,
             'active':0x1F4A5,
-            'inactive':0x1F6A7,
-            'edit':0x1F528,
-            'config':0x1F529,
+            'inactive':0x2B55,
+            'edit':[0x270F,0xFE0F],
+            'config':[0x2699,0xFE0F],// 0x1F529,
             'linked':0x1F517,
             'teleport':0x2728,
             'teleportall':0x1F52E,
@@ -50,19 +50,35 @@
             'restrictedportal':0x1F365,
             'help':0x1F9ED,
             'error':0x26A0,
-            'locked':0x1F6D1,
+            'locked':0x2B55,
             'unlocked':0x1F7E2,
             'ping':0x1F50E,
             'menu':0x1F53C,
             'pad':0x1F4AB,
-            'editname':0x1F4DD,
+            'editname':[0x1F3F7,0xFE0F],
             'message':0x1F4AD,
             'random':0x1F500,
-            'select':0x1F520
+            'select':0x1F520,
+            'nav':[0x1F441,0xFE0F,0x200D,0x1F5E8,0xFE0F],
+            'key':[0x1F5DD,0xFE0F]
+        },
+        emojibuilder = (numref) => {
+            let results = '',emoji=emojiObj[numref];
+            if(Array.isArray(emoji)){
+                _.each(emoji, function(ref){
+                    results += String.fromCodePoint(ref)
+                });
+            }else{
+                results +=String.fromCodePoint(emoji)
+            }
+            return results;
         },
         defaultButtonStyles = 'border:1px solid black;border-radius:.5em;padding:2px;margin:2px;font-weight:bold;text-align:right;',
-        configButtonStyles = 'width:150px;background-color:white;color:black;font-size:.9em;',
-        emojiButtonStyles = 'width:18px;height:18px;background-color:#efefef;color:black;font-size:1em',
+        configButtonStyles = 'width:150px;background-color:white;color:black;font-size:1em;font-family:Arial',
+        emojiButtonStyles = 'width:1.4em;height:1.4em;background-color:#efefef;color:black;font-size:1em;line-height:1.4em;padding:none;font-family:Arial;',
+        headingAreaStyles = 'background-color:black;color:white;font-size:1.1em;font-weight:normal;font-family:Candal;padding:.1em .1em .2em .2em;border-radius:.2em;line-height:2em;',
+        boundingBoxStyles = 'border: 1px solid black; background-color: white; padding: .2em .2em;margin-top:20px;border-radius:.1em;',
+        tableCellStyles = '',
         emojiButtonBuilder = function(contentsObj){
             let results = '<a title="'+ contentsObj.param + '" href="!teleport --',
             subconstruct = txt => results += txt;
@@ -70,9 +86,9 @@
             subconstruct('" style="' );
             subconstruct( defaultButtonStyles + emojiButtonStyles + '">');
             if(contentsObj.icon){
-                subconstruct(String.fromCodePoint(emojiObj[contentsObj.icon]));
+                subconstruct( emojibuilder(contentsObj.icon) );
             }else{
-                subconstruct( ( ( Teleport.configparams[contentsObj.param.toString()])?String.fromCodePoint(emojiObj.on):String.fromCodePoint(emojiObj.off) ) );
+                subconstruct( ( ( Teleport.configparams[contentsObj.param.toString()])?emojibuilder('on'):emojibuilder('off') ) );
             }
             subconstruct('</a>');
             return results
@@ -84,9 +100,23 @@
             subconstruct('" style="background-color:white' );
             subconstruct(';color:black;' + defaultButtonStyles + configButtonStyles + '">');
             if(contentsObj.icon){
-                subconstruct( contentsObj.param + ': ' + String.fromCodePoint(emojiObj[contentsObj.icon]));
+                subconstruct( contentsObj.param + ': ' + emojibuilder(contentsObj.icon));
             }else{
-                subconstruct( contentsObj.param + ': ' + ((Teleport.configparams[contentsObj.param.toString()])?String.fromCodePoint(emojiObj.on):String.fromCodePoint(emojiObj.off)));
+                subconstruct( contentsObj.param + ': ' + ((Teleport.configparams[contentsObj.param.toString()])?emojibuilder('on'):emojibuilder('off')));
+            }
+            subconstruct('</a>');
+            return results
+        },
+        standardButtonBuilder = function(contentsObj){
+            let results = '<a href="!teleport --',
+            subconstruct = txt => results += txt;
+            subconstruct( contentsObj.apicall );
+            subconstruct('" style="background-color:white' );
+            subconstruct(';color:black;' + defaultButtonStyles + '">');
+            if(contentsObj.icon){
+                subconstruct( contentsObj.param + ' ' + emojibuilder(contentsObj.icon));
+            }else{
+                subconstruct( contentsObj.param + ' ' + ((Teleport.configparams[contentsObj.param.toString()])?emojibuilder('on'):emojibuilder('off')));
             }
             subconstruct('</a>');
             return results
@@ -95,36 +125,40 @@
         // This may include a re-do on how tokens are registered and how they are kitted out.
         helpDisplay = function(){
             
-            let output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px">'
-            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;border-bottom:1px solid black;">';
+            let output = ' <div style="' + boundingBoxStyles + '">' 
+            + '<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="border-bottom:1px solid black;">';
+            output +='<span style="display:block;' + headingAreaStyles + '">'
             output +='Teleport Help';
+            output +='</span>'
             output +='</div>';
             output +='<p>Teleport is an API script that uses chat menus and chat buttons to manage teleport pads.</p>';
             output +='<p>This includes creating teleport pads, registering teleport pad destinations, managing general settings,' + 
                       ' locking pads individually from autoteleporting, and un-linking teleport pad destinations.</p>';
             output +='<p>Each pad has an individual menu for invoking teleport for a selected token, and for pinging a pad if you cannot locate it on the page.</p>';
-            output +='<p>'+ configButtonBuilder({param:'Main Menu',apicall:'menu',icon:'help'}) +'</p>';
+            output +='<p>'+ standardButtonBuilder({param:'Main Menu',apicall:'menu',icon:'menu'}) +'</p>';
             output +='</div>';
             outputToChat(output); 
             
         },
         menuDisplay = function(){
-            let output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px">'
+            let output = ' <div style="' + boundingBoxStyles + '">'
             +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
+            output +='<span style="display:block;' + headingAreaStyles + '">'
             output +='Main Menu';
+            output +='</span>'
             output +='</div>';
             output +='<p>Commands in Teleport are always preceded by !teleport.</p>';
-            output +='<p>' + configButtonBuilder({param:'Create Teleport Pad',apicall:'createpad|?{Pad Name|Telepad ' + state.teleport.increment++ + '}',icon:'teleportall'}) + '</p>';
-            output +='<p>' + configButtonBuilder({param:'Config Panel',apicall:'config',icon:'config'}) + '</p>';
-            output +='<p>' + configButtonBuilder({param:'Teleporter Pad List',apicall:'padlist',icon:'portal'}) + '</p>';
+            output +='<p>' + standardButtonBuilder({param:'Create Teleport Pad',apicall:'createpad|?{Pad Name|Telepad ' + state.teleport.increment++ + '}',icon:'teleportall'}) + '</p>';
+            output +='<p>' + standardButtonBuilder({param:'Configuration Menu',apicall:'config',icon:'config'}) + '</p>';
+            output +='<p>' + standardButtonBuilder({param:'Teleporter Pad List',apicall:'padlist',icon:'portal'}) + '</p>';
             output +='</div>';
             outputToChat(output); 
         },
         configDisplay = function(){
-            let output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px;">'
-            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
-            output +='Configuration Menu    ' + emojiButtonBuilder( {param:'Main Menu',apicall:'menu',icon:'help'} ) + '';
-            output +='</div><table style="border:1px solid black;">';
+            let output = ' <div style="' + boundingBoxStyles + '">'
+            +'<div style="' + headingAreaStyles + '">';
+            output +='<table style="padding: none;"><tr><td width="90%">Configuration Menu</td><td>' + emojiButtonBuilder( {param:'Main Menu',apicall:'menu',icon:'help'} ) + '</td></tr></table>';
+            output +='</div><table style="border:1px solid black;width:100%">';
             _.each(Object.keys(state.teleport.config), function(param){
                 output += '<tr><td style="text-align:right;">' + configButtonBuilder({param:param,apicall:param.toLowerCase()}) + '</td></tr>';
             });
@@ -134,9 +168,9 @@
         padDisplay = function(){
             let output = '',
             padlist=teleportPadList();
-            output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px">'
-            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
-            output +='Teleport Pad List    ' + emojiButtonBuilder( {param:'Main Menu',apicall:'menu',icon:'help'} ) + '';
+            output = ' <div style="' + boundingBoxStyles + '">'
+            +'<div style="' + headingAreaStyles + '">';
+            output +='<table style="padding: none;"><tr><td width="90%">Teleport Pad List</td><td>' + emojiButtonBuilder( {param:'Main Menu',apicall:'menu',icon:'help'} ) + '</td></tr></table>';
             output +='</div><table style="border:1px solid black;width:100%">';
             _.each(padlist, function(pad){
                 let targettext = '';
@@ -199,25 +233,27 @@
             }else{
                 targettext += 'not linked';
             }
-            output = ' <div style="border: 1px solid black; background-color: white; padding: 3px 3px;margin-top:20px">'
-            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
-            output +='Pad Edit for ' + pad.get('name') + emojiButtonBuilder( {param:'Teleport Pad List',apicall:'padlist',icon:'portal'} ) + '';
+            output = ' <div style="' + boundingBoxStyles + '">'
+            + '<div style="' + headingAreaStyles + '">';
+            output +='<table style="padding: none;"><tr><td width="90%">Pad Edit</td><td>' + emojiButtonBuilder( {param:'Teleport Pad List',apicall:'padlist',icon:'portal'} ) + '</td></tr></table>';
             output +='</div><table style="border:1px solid black;width:100%">';
             output += '<tr><td style="text-align:left;font-weight:bold;">' + pad.get('name') + '</td><td>' + emojiButtonBuilder( {param:'Rename Token',apicall:'renamepad ?{Pad Name|'+ pad.get('name') +'}|' + pad.get('_id'), icon:'editname'} ) + '</td></tr>';
             output += '<tr><td>Ping</td><td>' + emojiButtonBuilder( {param:'Ping Pad',apicall:'pingpad|' + pad.get('_id'),icon:'ping'} ) + '</td></tr>';
-            output += '<tr><td>SFX:' + ((pad.get('bar2_value') !== '')?pad.get('bar2_value'):'none')
+            
+            output += '<tr><td>SFX:' + ((pad.get('bar2_value') !== '')?pad.get('bar2_value'):'none');
+            output += '</td><td>' + emojiButtonBuilder( {param:'Show SFX',apicall:'showpdsfx|' + pad.get('_id'),icon:'active'} ) + '</td></tr>';
+            output += '<tr><td>';
             let sfxapicall = 'editpdsfx ?{Special Effects Shape|bomb|bubbling|burn|burst|explode|glow|missile|nova|none}-' + 
             '?{Special Effects Color|acid|blood|charm|death|fire|frost|holy|magic|slime|smoke|water}' + '|' + pad.get('_id');
             //let apicall = 'editpadsfx ?{Options|Choose one:,&#63;{Choose an option&#124;Try again.&#124;A&#124;B&#124;C&#124;D&#124;E&#124;F&#124;G&#125;|A|B|C|D|E|F|G} |' + pad.get('_id');
-            output += configButtonBuilder({param:'Set Pad SFX',apicall:sfxapicall,icon:'teleportall'}) 
-            output += '</td><td>' + emojiButtonBuilder( {param:'Show SFX',apicall:'showpdsfx|' + pad.get('_id'),icon:'active'} ) + '</td></tr>';
-            //
+            output += standardButtonBuilder({param:'Set Pad SFX',apicall:sfxapicall,icon:'teleportall'}) + '</td><td></td></tr>';
             
-            output += '<tr><td>Message:' + ((pad.get('bar2_max') !== '')?pad.get('bar2_max'):'none');
+            output += '<tr><td>Message:</td><td>' + emojiButtonBuilder( {param:'Show Message',apicall:'showpdmsg|' + pad.get('_id'),icon:'message'} ) + '</td></tr>';
+            output += '<tr><td colspan="2">' + ((pad.get('bar2_max') !== '')?pad.get('bar2_max'):'none') + '</td></tr><tr><td colspan="2">';
             let msgapicall = 'editpdmsg ?{Activation Message|' + ((pad.get('bar2_max') !== '')?pad.get('bar2_max'):'none') + '}' + '|' + pad.get('_id');
             //let apicall = 'editpadsfx ?{Options|Choose one:,&#63;{Choose an option&#124;Try again.&#124;A&#124;B&#124;C&#124;D&#124;E&#124;F&#124;G&#125;|A|B|C|D|E|F|G} |' + pad.get('_id');
-            output += configButtonBuilder({param:'Set Pad Message',apicall:msgapicall,icon:'message'}) 
-            output += '</td><td>' + emojiButtonBuilder( {param:'Show Message',apicall:'showpdmsg|' + pad.get('_id'),icon:'message'} ) + '</td></tr>';
+            output += standardButtonBuilder({param:'Set Pad Message',apicall:msgapicall,icon:'message'}) 
+            output += '</td></tr>';
             
             //
             output += '<tr><td>Teleport Token To</td><td>' + emojiButtonBuilder( {param:'Teleport Token',apicall:'teleporttoken|' + pad.get('_id'),icon:'teleport'} ) + '</td></tr>';
@@ -477,6 +513,9 @@
                         return outputToChat('Select a token to be the teleport pad.');
                     }
                     let pad = getObj('graphic',msg.selected[0]._id);
+                    if(typeof pad ==='undefined'){
+                        return outputToChat('Only graphic tokens can be set to be a teleport pad.');
+                    }
                     if(pad.get('_subtype') === 'card'){ return outputToChat("Select a target token that is not a card.")}
                     if(pad.get('bar1_value') === 'teleportpad'){return outputToChat("Select a target token that is not already a teleport pad.")}
                     pad.set({
