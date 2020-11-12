@@ -346,6 +346,7 @@
                 let targetlist = pad.get('bar1_max');
                 if(Array.isArray(targetlist)){
                     _.each(targetlist, function(targ){
+                        if(!checkTokenMarkerMatch(obj,getObj('graphic',targ))){return};
                         returntext += '|' + getObj('graphic',targ).get('name') + ',' + getObj('graphic',targ).get('_id');
                     });
                     returntext += '}';
@@ -381,6 +382,9 @@
                 hypot = Math.ceil(Math.sqrt(Math.pow((pad.get('left') - obj.get('left')),2) + Math.pow((pad.get('top') - obj.get('top')),2)));
                 // log("hypot:" + hypot + " | objrad:" + objrad + " | padrad:" + padrad + " | test:" + (hypot < (objrad+padrad)));
                 if(hypot < (objrad+padrad)){
+                    if(!checkTokenMarkerMatch(obj,pad)){
+                        return;
+                    }
                     teleportMsg({pad:pad,tgt:obj});
                     let targetlist = pad.get('bar1_max');
                     if(Array.isArray(targetlist) && pad.get('fliph') === true){
@@ -395,6 +399,19 @@
                     return;
                 }
             });
+        },
+        checkTokenMarkerMatch = function(obj,pad){
+            log('In checkTokenMarkerMatch');
+            if(pad.get('statusmarkers') === ''){ return true }
+            let foundInBoth = _.intersection(obj.get('statusmarkers').split(','), pad.get('statusmarkers').split(','));
+            log(foundInBoth);
+            let conclusion = _.difference(pad.get('statusmarkers').split(','), foundInBoth);
+            log(conclusion);
+            if((conclusion[0] === '' && conclusion.length === 1) || conclusion.length === 0){
+                return true;
+            }else{
+                return false;
+            }
         },
         teleportAutoNextTarget = function(pad){
             // in case of accidental self-reference, just don't teleport 
