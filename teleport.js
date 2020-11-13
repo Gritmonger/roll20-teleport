@@ -10,7 +10,7 @@
                 - causing GM layer creatures to appear with pings and effects
                 - anything else you can think of for the tools this provides. 
         */
-        var version = '1.0 Beta Release',
+        var version = '0.9 Alpha Release',
             author = 'Gritmonger',
             lastModified = 1604783535334
         // DEFAULTPLAYER is used for pings where a controlled by lists "all"
@@ -600,6 +600,12 @@
                     }
                     if(pad.get('_subtype') === 'card'){ return outputToChat("Select a target token that is not a card.")}
                     if(pad.get('bar1_value') === 'teleportpad'){return outputToChat("Select a target token that is not already a teleport pad.")}
+                    if(pad.get('_pageid') !== Campaign().get('playerpageid')){
+                        let txt = 'You have created a teleport pad that is not on the Player Ribbon page.';
+                        txt += '\r It will not show up in the teleport pad list, and to see this pad on the list,';
+                        txt += ' you will have to move the player ribbon to this page, as right now teleport between pages is not enacted.'
+                        outputToChat(txt);
+                    }
                     pad.set({
                         layer:'gmlayer',
                         bar1_value:'teleportpad',
