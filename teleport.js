@@ -147,6 +147,8 @@
             output +='<p>This includes creating teleport pads, registering teleport pad destinations, managing general settings,' + 
                       ' locking pads individually from autoteleporting, and un-linking teleport pad destinations.</p>';
             output +='<p>Each pad has an individual menu for invoking teleport for a selected token, and for pinging a pad if you cannot locate it on the page.</p>';
+            output +='<p>Right now, the Teleport Pad display is <b>fixed to the player ribbon</b> meaning that the list of teleport pads only displays those' + 
+            'on the active player ribbon page, which means if you are creating pads on other pages, they will not show up in the current player ribbon display.</p>';
             output +='<p>'+ standardButtonBuilder({param:'Main Menu',apicall:'menu',icon:'menu'}) +'</p>';
             output +='</div>';
             outputToChat(output); 
