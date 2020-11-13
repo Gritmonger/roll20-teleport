@@ -10,11 +10,11 @@
                 - causing GM layer creatures to appear with pings and effects
                 - anything else you can think of for the tools this provides. 
         */
-        var version = '0.9 Alpha Release',
+        var version = '1.0',
             author = 'Gritmonger',
-            lastModified = 1604783535334
-        // DEFAULTPLAYER is used for pings where a controlled by lists "all"
-        // and for other situations where a GM might want to ping all. 
+            lastModified = 1605286468;
+        // State variables are cerried over between sessions, 
+        // so a user does not have to re-set configuration items every time a game starts
         state.teleport = state.teleport || {};
         state.teleport.config = state.teleport.config || {};
         state.teleport.increment = state.teleport.increment || 0;
@@ -29,6 +29,8 @@
             state.teleport.config[param] = setting;
             return setting;
         };
+        // DEFAULTPLAYER is used for pings where a controlled by lists "all"
+        // and for other situations where a GM might want to ping all. 
         var DEFAULTPLAYER,
         AUTOTELEPORT = getStateParam("AUTOTELEPORT",true),
         AUTOPING = getStateParam("AUTOPING",true),
@@ -63,6 +65,7 @@
             'nav':[0x1F441,0xFE0F,0x200D,0x1F5E8,0xFE0F],
             'key':[0x1F5DD,0xFE0F]
         },
+        // emojibuilder concatenates rendered emojis that use modifiers
         emojibuilder = (numref) => {
             let results = '',emoji=emojiObj[numref];
             if(Array.isArray(emoji)){
@@ -74,6 +77,7 @@
             }
             return results;
         },
+        // Style blocks - used for various chat construct appearances
         defaultButtonStyles = 'border:1px solid black;border-radius:.5em;padding:2px;margin:2px;font-weight:bold;text-align:right;',
         configButtonStyles = 'width:150px;background-color:white;color:black;font-size:1em;font-family:Arial',
         emojiButtonStyles = 'width:1.4em;height:1.4em;background-color:#efefef;color:black;font-size:1em;line-height:1.4em;padding:none;font-family:Arial;',
@@ -81,6 +85,7 @@
         boundingBoxStyles = 'border: 1px solid black; background-color: white; padding: .2em .2em;margin-top:20px;border-radius:.1em;',
         tokenButtonStyles = 'border: 1px solid #ccc;',
         tableCellStyles = '',
+        // Start of utility functions - Button Builders
         emojiButtonBuilder = function(contentsObj){
             let results = '<a title="'+ contentsObj.param + '" href="!teleport --',
             subconstruct = txt => results += txt;
@@ -133,10 +138,9 @@
             subconstruct('</a>');
             return results
         },
-        // Trying to create a !help function to help players set up teleport tokens. May include a wizard. 
-        // This may include a re-do on how tokens are registered and how they are kitted out.
+        // Start of menu display functions
+        // Help Display - this may be concatenated into a handout so it doesn't clutter up the interface at astartup. 
         helpDisplay = function(){
-            
             let output = ' <div style="' + boundingBoxStyles + '">' 
             + '<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="border-bottom:1px solid black;">';
             output +='<span style="display:block;' + headingAreaStyles + '">'
@@ -152,7 +156,6 @@
             output +='<p>'+ standardButtonBuilder({param:'Main Menu',apicall:'menu',icon:'menu'}) +'</p>';
             output +='</div>';
             outputToChat(output); 
-            
         },
         menuDisplay = function(){
             let output = ' <div style="' + boundingBoxStyles + '">'
@@ -304,6 +307,7 @@
             output += '</tr></table></div>';
             outputToChat(output);
         },
+        // Menu support functions (used to construct repeating sections of )
         getTokens = function(obj, mode){
             let stringtokenlist = obj.get("statusmarkers").split(','), results=[],chatMessage='';
             _.each(TOKENMARKERS, tokenmarker =>{
@@ -355,9 +359,8 @@
                 }
             }
             let player = findTokenPlayer({pad:pad,obj:obj});
-            log(player.get('_displayname'));
             outputToChat(configButtonBuilder( {param:'Select Destination',apicall:'teleporttoken|' + returntext,icon:'teleport'} ), player.get('_displayname'));
-            // outputToChat('!teleport --teleporttoken|' + returntext);
+
         },
         // This check is exclusively for auto-teleport, and never occurs
         // for chat-based teleport or teleport buttons. 
@@ -406,9 +409,7 @@
             log('In checkTokenMarkerMatch');
             if(pad.get('statusmarkers') === ''){ return true }
             let foundInBoth = _.intersection(obj.get('statusmarkers').split(','), pad.get('statusmarkers').split(','));
-            log(foundInBoth);
             let conclusion = _.difference(pad.get('statusmarkers').split(','), foundInBoth);
-            log(conclusion);
             if((conclusion[0] === '' && conclusion.length === 1) || conclusion.length === 0){
                 return true;
             }else{
@@ -448,7 +449,6 @@
             })
             return padList;
         },
-        teleportPad = function(){},
         teleportToken = function(params){
             let obj = params.obj, pad = params.pad;
             obj.set("layer","gmlayer")
@@ -471,10 +471,8 @@
             // figure out if there is a player attached
             if(Teleport.configparams.HIDEPING){
                 player = findTokenPlayer({obj:obj,pad:pad});
-                // log("tp:player: " + player);
                 oldcolor = player.get('color');
                 player.set('color','transparent');
-            
                 setTimeout(function(){
                     sendPing(pad.get('left'), pad.get('top'), Campaign().get('playerpageid'), player.id, true, player.id);
                     setTimeout(function(){
@@ -627,16 +625,13 @@
                     editPadDisplay(msg.content.split('|')[1]);
                 }
                 if(msg.content.indexOf('--editpdsfx') !== -1){
-                    log(msg.content);
                     editPadSFX( {pad:msg.content.split('|')[1],sfx:msg.content.split('|')[0].split(' ')[2]} );
                 }
                 if(msg.content.indexOf('--showpdsfx') !== -1){
-                    log(msg.content);
                     showPadSFX({pad:msg.content.split('|')[1]});
                 }
                 
                 if( msg.content.indexOf('--editpdmsg') !== -1){
-                    log(msg.content);
                     editPadMsg( { pad:msg.content.split('|')[1], msg:msg.content.split('|')[0].split('--editpdmsg ')[1]} );
                 }
                 
@@ -675,17 +670,14 @@
                         }, 10);
                 }
                 if(msg.content.indexOf('--showpdkeys') !== -1){
-                        // let pad = getObj('graphic',msg.content.split('|')[1]);
                         editPadTokenDisplay(msg.content.split('|')[1]);
                 }
                 if(msg.content.indexOf('--editpdkey') !== -1){
                     let markerName = msg.content.split('|')[2].toLowerCase(),
                     padID = msg.content.split('|')[1],
                     currentmarkers;
-                    
                     obj = getObj("graphic", padID );
                     currentMarkers = obj.get("statusmarkers").split(',');
-                    // I have to check if it's there - if it is, remove it, if it isn't, add it.
                     if(_.indexOf(currentMarkers, markerName) !== -1){
                         currentMarkers = _.without(currentMarkers, markerName)
                     }else{
@@ -749,7 +741,6 @@
    
             helpDisplay();
         };     
-        
         return {
             startup: RegisterEventHandlers,
             configparams: {
