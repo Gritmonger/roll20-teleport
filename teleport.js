@@ -149,13 +149,23 @@
             output +='</div>';
             output +='<p>Teleport is an API script that uses chat menus and chat buttons to manage teleport pads.</p>';
             output +='<p>This includes creating teleport pads, registering teleport pad destinations, managing general settings,' + 
-                      ' locking pads individually from autoteleporting, and un-linking teleport pad destinations.</p>';
+                      ' locking pads individually from autoteleporting, setting keys as requirements to activate auto-teleport,' + 
+                      ' and un-linking teleport pad destinations.</p>';
+            output +='<p>Teleport pads are tokens that reside on the GM layer. If Autoteleport is set to true, and the teleport pad has a linked pad,' + 
+                      ' a token moved into its area on the object layer is teleported automatically to the linked pad.</p>';
+            output += '<p>Linked pads are set as destinations, and two-way teleport works by linking each pad to the other. You can make a one-way teleport' + 
+                      ' by setting up two tokens and linking only one of them to the other. You can link many portals to one portal. If you link several' + 
+                      ' teleport pads from a single pad, the destination is random, unless you set the "Multi-Link" property on the Pad Edit Panel to "Select."</p>';
+            output +='<p>A selected token can also be teleported to a destination pad without autoteleport by using the teleport token button associated with that teleport pad.</p>';
+
             output +='<p>Each pad has an individual menu for invoking teleport for a selected token, and for pinging a pad if you cannot locate it on the page.</p>';
             output +='<p>Right now, the Teleport Pad display is <b>fixed to the player ribbon</b> meaning that the list of teleport pads only displays those' + 
             'on the active player ribbon page, which means if you are creating pads on other pages, they will not show up in the current player ribbon display.</p>';
-            output +='<p>'+ standardButtonBuilder({param:'Main Menu',apicall:'menu',icon:'menu'}) +'</p>';
+            output +='<p>'+ standardButtonBuilder({param:'Main Menu',apicall:'menu',icon:'help'}) +'</p>';
             output +='</div>';
+            // The first time you ever use this, you get an output to chat. You dn't get another unless you delete the handout. 
             outputToChat(output); 
+            return output;
         },
         menuDisplay = function(){
             let output = ' <div style="' + boundingBoxStyles + '">'
@@ -392,7 +402,7 @@
                     }
                     teleportMsg({pad:pad,tgt:obj});
                     let targetlist = pad.get('bar1_max');
-                    if(Array.isArray(targetlist) && pad.get('fliph') === true){
+                    if(Array.isArray(targetlist) && pad.get('fliph') === true && targetlist.length > 1){
                         teleportSelectList({pad:pad,obj:obj});
                         return;
                     }
@@ -738,8 +748,23 @@
                                 return player;
                             })();
             TOKENMARKERS = JSON.parse(Campaign().get("token_markers"));
-   
-            helpDisplay();
+            
+            if(!state.teleport.help || !getObj('handout',state.teleport.help)){
+    		    if(findObjs({type:'handout',name:'Teleport API'})[0]){
+    		        state.teleport.help = findObjs({type:'handout',name:'Teleport API'})[0].get('_id');
+    		    }else{
+    		        let content = helpDisplay(),
+    		        handout = createObj('handout',{
+                        name: 'Teleport API',
+                        inplayerjournals: "gm",
+                        controlledby: DEFAULTPLAYER.get('_id')
+                    });
+                    state.teleport.help = handout.get('_id');
+                    setTimeout(function(){
+                        handout.set('notes',content);
+                    },0);
+    		    }
+    		}
         };     
         return {
             startup: RegisterEventHandlers,
