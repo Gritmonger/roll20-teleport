@@ -1,4 +1,7 @@
-    var Teleport = Teleport || (function(){
+
+
+    const Teleport = (() => {
+
         /*
             Teleport is a script designed to make a few things easier: 
                 - multi-storey buildings
@@ -10,16 +13,18 @@
                 - causing GM layer creatures to appear with pings and effects
                 - anything else you can think of for the tools this provides. 
         */
-        var version = '1.0',
-            author = 'Gritmonger',
-            lastModified = 1605286468;
-        // State variables are cerried over between sessions, 
+        let version = "1.2.4",  // eslint-disable-line no-unused-vars
+            author = "616652/Patrick K.",   // eslint-disable-line no-unused-vars
+            lastModified = 1745816192937;  // eslint-disable-line no-unused-vars
+        // State variables are carried over between sessions, 
         // so a user does not have to re-set configuration items every time a game starts
         state.teleport = state.teleport || {};
         state.teleport.config = state.teleport.config || {};
+        // This is a continuously incrementing variable to always provide a unique portal name
         state.teleport.increment = state.teleport.increment || 0;
-        var getStateParam = function(param,deflt){
-            if(typeof state.teleport.config[param] !== 'null' && typeof state.teleport.config[param] !== 'undefined'){
+        
+        let getStateParam = function(param,deflt){
+            if(state.teleport.config.hasOwnProperty(param)){
                 return state.teleport.config[param];
             }else{
                 return setStateParam(param,deflt);
@@ -29,297 +34,406 @@
             state.teleport.config[param] = setting;
             return setting;
         };
+        state.teleport.limbo = state.teleport.limbo || {};
         // DEFAULTPLAYER is used for pings where a controlled by lists "all"
         // and for other situations where a GM might want to ping all. 
-        var DEFAULTPLAYER,
+        
+        
+        let DEFAULTPLAYER,
+        JUMPGATE,
+        TOKENCOPY,
         AUTOTELEPORT = getStateParam("AUTOTELEPORT",true),
         AUTOPING = getStateParam("AUTOPING",true),
         HIDEPING = getStateParam("HIDEPING",true),
         SHOWSFX = getStateParam("SHOWSFX",true),
-        PLAYERINDEX = {},
+        PLAYERINDEX = {},   // eslint-disable-line no-unused-vars
         TOKENMARKERS,
         // The emojiObj is used to store the graphics used for config buttons and activation buttons
         emojiObj = { 
-            'on': [0x2714,0xFE0F],
-            'off': 0x274C,
-            'active':0x1F4A5,
-            'inactive':0x2B55,
-            'edit':[0x270F,0xFE0F],
-            'config':[0x2699,0xFE0F],// 0x1F529,
-            'linked':0x1F517,
-            'teleport':0x2728,
-            'teleportall':0x1F52E,
-            'portal':0x1F300,
-            'restrictedportal':0x1F365,
-            'help':0x1F9ED,
-            'error':0x26A0,
-            'locked':0x2B55,
-            'unlocked':0x1F7E2,
-            'ping':0x1F50E,
-            'menu':0x1F53C,
-            'pad':0x1F4AB,
-            'editname':[0x1F3F7,0xFE0F],
-            'message':0x1F4AD,
-            'random':0x1F500,
-            'select':0x1F520,
-            'nav':[0x1F441,0xFE0F,0x200D,0x1F5E8,0xFE0F],
-            'key':[0x1F5DD,0xFE0F]
+            "on": [0x2714,0xFE0F],
+            "off": 0x274C,
+            "active":0x1F4A5,
+            "inactive":0x2B55,
+            "edit":[0x270F,0xFE0F],
+            "config":[0x2699,0xFE0F],// 0x1F529,
+            "linked":0x1F517,
+            "teleport":0x2728,
+            "teleportall":0x1F52E,
+            "portal":0x1F300,
+            "restrictedportal":0x1F365,
+            "help":0x1F9ED,
+            "error":[0x26A0,0xFE0F],
+            "locked":0x2B55,
+            "unlocked":0x1F7E2,
+            "ping":0x1F50E,
+            "menu":0x1F4AC,
+            "pad":0x1F4AB,
+            "editname":[0x1F3F7,0xFE0F],
+            "message":0x1F4AD,
+            "random":0x1F500,
+            "select":0x1F520,
+            "nav":[0x1F441,0xFE0F,0x200D,0x1F5E8,0xFE0F],
+            "key":[0x1F5DD,0xFE0F],
+            "global":[0x1F310],
+            "addlink":[0x26D3,0xFE0F]
         },
         // emojibuilder concatenates rendered emojis that use modifiers
         emojibuilder = (numref) => {
-            let results = '',emoji=emojiObj[numref];
+            let results = "",emoji=emojiObj[numref];
             if(Array.isArray(emoji)){
                 _.each(emoji, function(ref){
-                    results += String.fromCodePoint(ref)
+                    results += String.fromCodePoint(ref);
                 });
             }else{
-                results +=String.fromCodePoint(emoji)
+                results +=String.fromCodePoint(emoji);
             }
             return results;
         },
         // Style blocks - used for various chat construct appearances
-        defaultButtonStyles = 'border:1px solid black;border-radius:.5em;padding:2px;margin:2px;font-weight:bold;text-align:right;',
-        configButtonStyles = 'width:150px;background-color:white;color:black;font-size:1em;font-family:Arial',
-        emojiButtonStyles = 'width:1.4em;height:1.4em;background-color:#efefef;color:black;font-size:1em;line-height:1.4em;padding:none;font-family:Arial;',
-        headingAreaStyles = 'background-color:black;color:white;font-size:1.1em;font-weight:normal;font-family:Candal;padding:.1em .1em .2em .2em;border-radius:.2em;line-height:2em;',
-        boundingBoxStyles = 'border: 1px solid black; background-color: white; padding: .2em .2em;margin-top:20px;border-radius:.1em;',
-        tokenButtonStyles = 'border: 1px solid #ccc;',
-        tableCellStyles = '',
+        defaultButtonStyles = "border:1px solid black;border-radius:.5em;padding:2px;margin:2px;font-weight:bold;text-align:right;",
+        configButtonStyles = "width:150px;background-color:white;color:black;font-size:1em;font-family:Arial",
+        emojiButtonStyles = "width:1.4em;height:1.4em;background-color:#efefef;color:black;font-size:1em;line-height:1.4em;padding:none;font-family:Arial;",
+        headingAreaStyles = "background-color:black;color:white;font-size:1.1em;font-weight:normal;font-family:Candal;padding:.1em .1em .2em .2em;border-radius:.2em;line-height:2em;",
+        boundingBoxStyles = "border: 1px solid black; background-color: white; padding: .2em .2em;margin-top:20px;border-radius:.1em;",
+        tokenButtonStyles = "border: 1px solid #ccc;",
+        tableCellStyles = "",   // eslint-disable-line no-unused-vars
         // Start of utility functions - Button Builders
-        emojiButtonBuilder = function(contentsObj){
-            let results = '<a title="'+ contentsObj.param + '" href="!teleport --',
+        emojiButtonBuilder = function( title, apicall, icon){
+            let results = "<a title=\"" + title + "\" href=\"!teleport --",
             subconstruct = txt => results += txt;
-            subconstruct( contentsObj.apicall );
-            subconstruct('" style="' );
-            subconstruct( defaultButtonStyles + emojiButtonStyles + '">');
-            if(contentsObj.icon){
-                subconstruct( emojibuilder(contentsObj.icon) );
+            subconstruct( apicall );
+            subconstruct("\" style=\"" );
+            subconstruct( defaultButtonStyles + emojiButtonStyles + "\">");
+            if(icon){
+                subconstruct( emojibuilder(icon) );
             }else{
-                subconstruct( ( ( Teleport.configparams[contentsObj.param.toString()])?emojibuilder('on'):emojibuilder('off') ) );
+                subconstruct( ( ( Teleport.configparams[title])?emojibuilder("on"):emojibuilder("off") ) );
             }
-            subconstruct('</a>');
-            return results
+            subconstruct("</a>");
+            return results;
         },
-        configButtonBuilder = function(contentsObj){
-            let results = '<a href="!teleport --',
+        configButtonBuilder = function(title, apicall, icon){
+            let results = "<a href=\"!teleport --",
             subconstruct = txt => results += txt;
-            subconstruct( contentsObj.apicall );
-            subconstruct('" style="background-color:white' );
-            subconstruct(';color:black;' + defaultButtonStyles + configButtonStyles + '">');
-            if(contentsObj.icon){
-                subconstruct( contentsObj.param + ': ' + emojibuilder(contentsObj.icon));
+            subconstruct( apicall );
+            subconstruct("\" style=\"background-color:white" );
+            subconstruct(";color:black;" + defaultButtonStyles + configButtonStyles + "\">");
+            if(icon){
+                subconstruct( title + ": " + emojibuilder(icon));
             }else{
-                subconstruct( contentsObj.param + ': ' + ((Teleport.configparams[contentsObj.param.toString()])?emojibuilder('on'):emojibuilder('off')));
+                subconstruct( title + ": " + ((Teleport.configparams[title])?emojibuilder("on"):emojibuilder("off")));
             }
-            subconstruct('</a>');
-            return results
+            subconstruct("</a>");
+            return results;
         },
-        standardButtonBuilder = function(contentsObj){
-            let results = '<a href="!teleport --',
+        standardButtonBuilder = function(title, apicall, icon){
+            let results = "<a href=\"!teleport --",
             subconstruct = txt => results += txt;
-            subconstruct( contentsObj.apicall );
-            subconstruct('" style="background-color:white' );
-            subconstruct(';color:black;' + defaultButtonStyles + '">');
-            if(contentsObj.icon){
-                subconstruct( contentsObj.param + ' ' + emojibuilder(contentsObj.icon));
+            subconstruct( apicall );
+            subconstruct("\" style=\"background-color:white" );
+            subconstruct(";color:black;" + defaultButtonStyles + "\">");
+            if(icon){
+                subconstruct( title + " " + emojibuilder(icon));
             }else{
-                subconstruct( contentsObj.param + ' ' + ((Teleport.configparams[contentsObj.param.toString()])?emojibuilder('on'):emojibuilder('off')));
+                subconstruct( title + " " + ((Teleport.configparams[title])?emojibuilder("on"):emojibuilder("off")));
             }
-            subconstruct('</a>');
-            return results
+            subconstruct("</a>");
+            return results;
         },
-        tokenButtonBuilder = function(pad,token,status){
+        tokenButtonBuilder = function(pad, token, status){
             // this will get a token reference
-            let results = '<a ' + ((status)?'aria-checked="true"':'aria-checked="false"') + ' style="' + tokenButtonStyles + ((status)?'background-color:#999;':'background-color:white;') + '" href="!teleport --editpdkey|',
+            let results = "<a " + ((status)?"aria-checked=\"true\"":"aria-checked=\"false\"") + " style=\"" + tokenButtonStyles + ((status)?"background-color:#999;":"background-color:white;") + "\" href=\"!teleport --editpdkey|",
             subconstruct = txt => results += txt;
-            subconstruct(pad.get('_id'));
-            subconstruct('|' + token.name + '">');
+            subconstruct(pad.get("_id"));
+            subconstruct("|" + token.name + "\">");
             subconstruct(renderTokens(token));
-            subconstruct('</a>');
-            return results
+            subconstruct("</a>");
+            return results;
+        },
+        rawButtonBuilder = function(title, link, icon){
+            let results = "<a style=\"" + defaultButtonStyles + configButtonStyles + ";padding:.2em;\" href=\"" + link + "\">",
+            subconstruct = txt => results += txt;
+            if(icon){
+                subconstruct( title + " " + emojibuilder(icon));
+            }else{
+                subconstruct( title );
+            }
+            subconstruct("</a>");
+            return results;
         },
         // Start of menu display functions
-        // Help Display - this may be concatenated into a handout so it doesn't clutter up the interface at astartup. 
+        // Help Display - this may be concatenated into a handout so it doesn"t clutter up the interface at astartup. 
         helpDisplay = function(){
-            let output = ' <div style="' + boundingBoxStyles + '">' 
-            + '<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="border-bottom:1px solid black;">';
-            output +='<span style="display:block;' + headingAreaStyles + '">'
-            output +='Teleport Help';
-            output +='</span>'
-            output +='</div>';
-            output +='<p>Teleport is an API script that uses chat menus and chat buttons to manage teleport pads.</p>';
-            output +='<p>This includes creating teleport pads, registering teleport pad destinations, managing general settings,' + 
-                      ' locking pads individually from autoteleporting, setting keys as requirements to activate auto-teleport,' + 
-                      ' and un-linking teleport pad destinations.</p>';
-            output +='<p>Teleport pads are tokens that reside on the GM layer. If Autoteleport is set to true, and the teleport pad has a linked pad,' + 
-                      ' a token moved into its area on the object layer is teleported automatically to the linked pad.</p>';
-            output += '<p>Linked pads are set as destinations, and two-way teleport works by linking each pad to the other. You can make a one-way teleport' + 
-                      ' by setting up two tokens and linking only one of them to the other. You can link many portals to one portal. If you link several' + 
-                      ' teleport pads from a single pad, the destination is random, unless you set the "Multi-Link" property on the Pad Edit Panel to "Select."</p>';
-            output +='<p>A selected token can also be teleported to a destination pad without autoteleport by using the teleport token button associated with that teleport pad.</p>';
-
-            output +='<p>Each pad has an individual menu for invoking teleport for a selected token, and for pinging a pad if you cannot locate it on the page.</p>';
-            output +='<p>Right now, the Teleport Pad display is <b>fixed to the player ribbon</b> meaning that the list of teleport pads only displays those' + 
-            'on the active player ribbon page, which means if you are creating pads on other pages, they will not show up in the current player ribbon display.</p>';
-            output +='<p>'+ standardButtonBuilder({param:'Main Menu',apicall:'menu',icon:'help'}) +'</p>';
-            output +='</div>';
-            // The first time you ever use this, you get an output to chat. You dn't get another unless you delete the handout. 
-            outputToChat(output); 
+            let output = " <div style=\"" + boundingBoxStyles + "\">" + "<div style=\"font-weight: bold; border-bottom: 1px solid black;font-size: 100%;border-bottom:1px solid black;\">";
+            output +="<span style=\"display:block;" + headingAreaStyles + "\">";
+            output +="Teleport Help";
+            output +="</span>";
+            output +="</div>";
+            output += "<h3>Teleport</h3><br />";
+            output += "<p>This script provides a way for GMs or players to teleport tokens within a page or between pages.</p>";
+            output += "<hr /><h4>Installation</h4><br />";
+            output += "<p>On installation, a note (<i>Teleport API</i>) is created, and help text appears in chat, both of which have buttons which activate the main menu. The note persists, and will not be re-created unless you remove the note, so you can always find and activate the menu button. You can also type <code>!teleport --menu</code> into chat. </p>";
+            output += "<hr /><h4>Beginning Setup</h4><br />";
+            output += "<p>To set up a teleport pad token, drag a token to the objects layer and then click on the chat button to \"Create Teleport Pad\" on the main menu. </p>";
+            output += "<ul><li>You will be prompted with a naming box, name your teleport pad whatever you like. You can rename it later from the interface. This is for you to read, and is not used by the API to find portal pads, so don\"t worry about renaming it at any time.</li>";
+            output += "<li>The token will be automatically moved to the GM layer and set up with its initializing properties.</li></ul>";
+            output += "<p>Once you do this, the chat menu will pop up a list of teleport pads it detects on the page the <b>GM</b> is on currently. You can now use the teleport button on the chat (the emoji button that looks like sparkles, and gives you a tooltip of \"teleport token\" on mouseover) for that teleport pad to teleport a selected token to this teleport pad.</p>";
+            output += "<p>To set up auto-teleporting (players able to interact with one teleport pad that automatically moves them to another teleport pad), you need to <b>link</b> the first teleport pad you created to a second teleport pad.</p>";
+            output += "<ul><li>Create a second teleport pad as you did the first one.</li>";
+            output += "<li>Now, go to the gmlayer and select both teleport pads.</li>";
+            output += "<li>On the teleport pad list, click the \"link\" button on either pad. Teleport is smart enough not to link a portal to itself, so it will add the <b>other</b> portal to the portal linking button you pressed, and it should list it this way (show the name of the linked portal in its \"linked to\" label).</li>";
+            output += "<li>If you want the portals to link to each-other and be a two-way teleport, repeat this for the second portal, so each shows \"linked\" to the other teleport pad.</li></ul>";
+            output += "<p>Now, on the objects layer, test this by dragging any token over one of the teleport pads. These pads are invisible to your players, so if you want them to find them it is good practice to put a visible marker of the teleport pad on the map layer. You should see the token move to the gm layer, move to the other teleport pad location, and re-appear on the token layer.</p>";
+            output += "<hr /><h4>Cross-Page Teleport</h4><br />";
+            output += "<p>To set up cross-page teleport, you must create teleport tokens on each page you want to link by way of teleport, and then use the Global Teleport Pad List to link them, similar to how you did in the <b>Beginning Setup</b>. You also must make sure that player tokens for each player you want to teleport exist in the target pages. Preferably, they should be on the GM layer. If you don't have player tokens on the target page, the teleport or auto-teleport will fail. Currently, the API has trouble with creating tokens on target pages (specifically to do with images from the Roll20 Marketplace), so <b>Teleport</b> doesn't try and make a player token on the target page at this point.</p>";
+            output += "<p><b>Some warnings:</b></p>";
+            output += "<ul><li>Linking two pads, then copying one to another page will not work: teleport pads are linked by their unique IDs, and pasting a teleport pad to another page creates a new token with a new ID. It will keep links it has to <b>other teleport pads</b> but any links <b><i>to</i></b> it will be broken and will have to be re-set.</li>";
+            output += "<li>Cross-page teleport tries to spawn a specific page ribbon, and this will happen even if a player is not online - so teleporting player tokens to other pages when they are not online may have unforseen consequences. This is still being tested, and if out of synch can be \"fixed\" when all players are back online.</li></ul>";
+            output += "<hr /><h4>Creating API buttons from Teleport buttons</h4><br />";
+            output += "<p>Any activation of a button in chat will leave a record of what the command was - so you can press the up-arrow in chat to see the command that was passed to activate teleport.js. All commands are prefixed by !teleport and contain an attribute prefixed by two dashes to direct the command.</p>";
+            output +="<p>"+ standardButtonBuilder("Main Menu","menu","help") +"</p>";
+            output +="</div>";
+            // The first time you ever use this, you get an output to chat. You don"t get another unless you delete the handout. 
             return output;
         },
         menuDisplay = function(){
-            let output = ' <div style="' + boundingBoxStyles + '">'
-            +'<div style="font-weight: bold; border-bottom: 1px solid black;font-size: 100%;style="float:left;">';
-            output +='<span style="display:block;' + headingAreaStyles + '">'
-            output +='Main Menu';
-            output +='</span>'
-            output +='</div>';
-            output +='<p>Commands in Teleport are always preceded by !teleport.</p>';
-            output +='<p>' + standardButtonBuilder({param:'Create Teleport Pad',apicall:'createpad|?{Pad Name|Telepad ' + state.teleport.increment++ + '}',icon:'teleportall'}) + '</p>';
-            output +='<p>' + standardButtonBuilder({param:'Configuration Menu',apicall:'config',icon:'config'}) + '</p>';
-            output +='<p>' + standardButtonBuilder({param:'Teleporter Pad List',apicall:'padlist',icon:'portal'}) + '</p>';
-            output +='</div>';
+            let output = " <div style=\"" + boundingBoxStyles + "\">" + "<div style=\"font-weight: bold; border-bottom: 1px solid black;font-size: 100%;\">";
+            output +="<span style=\"display:block;" + headingAreaStyles + "\">";
+            output +="Main Menu";
+            output +="</span>";
+            output +="</div>";
+            output +="<p>Commands in Teleport are always preceded by !teleport.</p>";
+            output +="<p>" + standardButtonBuilder("Create Teleport Pad","createpad|?{Pad Name|Telepad " + state.teleport.increment + "}","teleportall") + "</p>";
+            output +="<p>" + standardButtonBuilder("Configuration Menu","config","config") + "</p>";
+            output +="<p>" + standardButtonBuilder("Teleporter Pad List","padlist","portal") + "</p>";
+            output +="<p>" + standardButtonBuilder("Global Pad List","globalpdlist","global") + "</p>";
+            output +="<p>" + standardButtonBuilder("Limbo Menu","globaltknlist","pad") + "</p>";
+            output +="</div>";
             outputToChat(output); 
         },
         configDisplay = function(){
-            let output = ' <div style="' + boundingBoxStyles + '">'
-            +'<div style="' + headingAreaStyles + '">';
-            output +='<table style="padding: none;"><tr><td width="90%">Configuration Menu</td><td>' + emojiButtonBuilder( {param:'Main Menu',apicall:'menu',icon:'help'} ) + '</td></tr></table>';
-            output +='</div><table style="border:1px solid black;width:100%">';
-            _.each(Object.keys(state.teleport.config), function(param){
-                output += '<tr><td style="text-align:right;">' + configButtonBuilder({param:param,apicall:param.toLowerCase()}) + '</td></tr>';
+            let output = " <div style=\"" + boundingBoxStyles + "\">" + "<div style=\"" + headingAreaStyles + "\">";
+            output +="<table style=\"padding: none;\"><tr><td width=\"90%\">Configuration Menu</td><td>" + emojiButtonBuilder("Main Menu","menu","help") + "</td></tr></table>";
+            output +="</div><table style=\"border:1px solid black;width:100%\">";
+            _.each(Object.keys(state.teleport.config), function(title){
+                output += "<tr><td style=\"text-align:right;\">" + configButtonBuilder(title,title.toLowerCase()) + "</td></tr>";
             });
-            output +='</table></div>';
+            output += "<tr><td style=\"text-align:right;font-weight:bold;\">" + configButtonBuilder("PURGE","purge","error") + "</td></tr>";
+            output +="</table></div>";
             outputToChat(output); 
         },
         padDisplay = function(){
-            let output = '',
-            padlist=teleportPadList();
-            output = ' <div style="' + boundingBoxStyles + '">'
-            +'<div style="' + headingAreaStyles + '">';
-            output +='<table style="padding: none;"><tr><td width="90%">Teleport Pad List</td><td>' + emojiButtonBuilder( {param:'Main Menu',apicall:'menu',icon:'help'} ) + '</td></tr></table>';
-            output +='</div><table style="border:1px solid black;width:100%">';
+            let output = "",
+            padlist=teleportPadList(DEFAULTPLAYER.get("_lastpage"));
+            output = " <div style=\"" + boundingBoxStyles + "\">" + "<div style=\"" + headingAreaStyles + "\">";
+            output +="<table style=\"padding: none;\"><tr><td width=\"90%\">Teleport Pad List</td><td>" + emojiButtonBuilder( "Main Menu","menu","help" ) + "</td></tr></table>";
+            output +="</div><table style=\"border:1px solid black;width:100%\">";
             _.each(padlist, function(pad){
-                let targettext = '';
-                
-                if(pad.get('bar1_max') !==''){
-                    let targetlist = pad.get('bar1_max');
+                let targettext = "";
+                if(pad.get("bar1_max") !==""){
+                    let targetlist = pad.get("bar1_max");
+                    targetlist = arrayChecker(targetlist,"array");
                     if(Array.isArray(targetlist)){
                         let count = 0;
                         _.each(targetlist, function(targ){
+                            
                             if(count>0){
-                                targettext += ',';
+                                targettext += ",";
                             }
-                            targettext += getObj('graphic',targ).get('name');
-                            count++
+                            if(!getObj("graphic",targ)){
+                                targettext += "Invalid value";
+                            }else{
+                                targettext += getObj("graphic",targ).get("name");
+                            }
+                            
+                            count++;
                         });
                     }else{
-                        targettext += getObj('graphic',pad.get('bar1_max')).get('name');
+                        if(!getObj("graphic",pad.get("bar1_max"))){
+                            targettext += "Invalid value";
+                        }else{
+                            targettext += getObj("graphic",pad.get("bar1_max")).get("name");
+                        }
+                        
                     }
                 }else{
-                    targettext += 'not linked';
+                    targettext += "not linked";
                 }
-                output += '<tr><td style="text-align:left;font-weight:bold;" colspan="5">' + pad.get('name') + '</td></tr>';
-                output += '<tr>'
-                output += '<td>' + emojiButtonBuilder( {param:'Ping Pad',apicall:'pingpad|' + pad.get('_id'),icon:'ping'} ) + '</td>';
-                output += '<td>' + emojiButtonBuilder( {param:'Edit Pad',apicall:'editpad|' + pad.get('_id'),icon:'edit'} ) + '</td>';
-                output += '<td>' + emojiButtonBuilder( {param:'Teleport Token',apicall:'teleporttoken|' + pad.get('_id'),icon:'teleport'} ) + '</td>';
-                if(pad.get('status_dead')){
-                    output += '<td>' + emojiButtonBuilder( {param:'Unlock Pad',apicall:'lockportal|' + pad.get('_id'),icon:'locked'} ) + '</td>';
+                output += "<tr><td style=\"text-align:left;font-weight:bold;\" colspan=\"5\">" + pad.get("name") + "</td></tr>";
+                output += "<tr>";
+                output += "<td>" + emojiButtonBuilder( "Ping Pad","pingpad|" + pad.get("_id"),"ping" ) + "</td>";
+                output += "<td>" + emojiButtonBuilder( "Edit Pad","editpad|" + pad.get("_id"),"edit" ) + "</td>";
+                output += "<td>" + emojiButtonBuilder( "Teleport Token","teleporttoken|" + pad.get("_id"),"teleport" ) + "</td>";
+                if(pad.get("status_dead")){
+                    output += "<td>" + emojiButtonBuilder( "Unlock Pad","lockportal|" + pad.get("_id"),"locked" ) + "</td>";
                 }else{
-                    output += '<td>' + emojiButtonBuilder( {param:'Lock Pad',apicall:'lockportal|' + pad.get('_id'),icon:'unlocked'} ) + '</td>';
+                    output += "<td>" + emojiButtonBuilder( "Lock Pad","lockportal|" + pad.get("_id"),"unlocked" ) + "</td>";
                 }
-                output += '<td>' + emojiButtonBuilder( {param:'Link Pad',apicall:'linkpad|' + pad.get('_id'),icon:'linked'} ) + '</td>';
-                output += '</tr>';
+                output += "<td>" + emojiButtonBuilder( "Link Pad","linkpad|" + pad.get("_id") + "|list","linked" ) + "</td>";
+                output += "</tr>";
                
-                output += '<tr><td style="text-align:left;border-bottom:1px solid black;" colspan="5"> linked to: ';
+                output += "<tr><td style=\"text-align:left;border-bottom:1px solid black;\" colspan=\"5\"> linked to: ";
                    output += targettext;
-                output += '</td></tr>';
+                output += "</td></tr>";
             });
-            output +='</table></div>';
+            output +="</table></div>";
+            outputToChat(output); 
+        },
+        padGlobalDisplay = function(){
+            let completeList = globalTeleportPadList(),
+            output = " <div style=\"" + boundingBoxStyles + "\">" + "<div style=\"" + headingAreaStyles + "\">";
+            output +="<table style=\"padding: none;\"><tr><td width=\"90%\">Global Pad List</td><td>" + emojiButtonBuilder( "Main Menu","menu","help" ) + "</td></tr></table>";
+            output +="</div>";
+            _.each(completeList, function(pageTokenArray,key){
+                if(Array.isArray(pageTokenArray) && pageTokenArray.length > 0){
+                    output+="<div style=\"font-weight:bold\">" + getObj("page",key).get("name") + "</div><table style=\"border:1px solid black;width:100%\">";
+                    _.each(pageTokenArray, function(token){
+                        let targettext = "";
+                
+                        if(token.get("bar1_max") !== ""){
+                            let targetlist = token.get("bar1_max");
+                            targetlist = arrayChecker(targetlist,"array");
+                            if(Array.isArray(targetlist)){
+                                let count = 0;
+                                _.each(targetlist, function(targ){
+                                    
+                                    if(count>0){
+                                        targettext += ",";
+                                    }
+                                    if(!getObj("graphic",targ)){
+                                        targettext += "Invalid value";
+                                    }else{
+                                        targettext += getObj("graphic",targ).get("name");
+                                    }
+                                    count++;
+                                });
+                            }else{
+                                if(!getObj("graphic",token.get("bar1_max"))){
+                                    targettext += "Invalid value";
+                                }else{
+                                    targettext += getObj("graphic",token.get("bar1_max")).get("name");
+                                }
+                            }
+                        }else{
+                            targettext += "not linked";
+                        }
+                        output+="<tr><td style=\"width:90%\">" + token.get("name") + "</td>";
+                        output+="<td>" + emojiButtonBuilder( "Teleport Token","teleporttoken|" + token.get("_id"),"teleport" ) + "</td>";
+                        output+="<td>" + emojiButtonBuilder( "Link Pad","linkpad|" + token.get("_id") + "|global","linked" ) + "</td>";
+                        output+="<td>" + emojiButtonBuilder( "Add Link","addlink|" + token.get("_id") + "|global","addlink" ) + "</td></tr>";
+                        output += "<tr><td style=\"text-align:left;border-bottom:1px solid black;\" colspan=\"4\"> linked to: ";
+                        output += targettext;
+                        output += "</td></tr>";
+                    });
+                    output+="</table>";
+                }
+                
+            });
+            outputToChat(output); 
+        },
+        limboDisplay = function(){
+            let completeList = globalLimboList(),
+            output = " <div style=\"" + boundingBoxStyles + "\">" + "<div style=\"" + headingAreaStyles + "\">";
+            output +="<table style=\"padding: none;\"><tr><td width=\"90%\">Limbo Resident List</td><td>" + emojiButtonBuilder( "Main Menu","menu","help" ) + "</td></tr></table>";
+            output +="</div>";
+            _.each(completeList, function(tokenArray,key){
+                if(Array.isArray(tokenArray)){
+                    output+="<div style=\"font-weight:bold\">" + getObj("page",key).get("name") + "</div><table style=\"border:1px solid black;width:100%\">";
+                    _.each(tokenArray, function(token){
+                        output+="<tr><td style=\"width:90%\">" + token.get("name") + "</td>";
+                        output += "</td></tr>";
+                    });
+                    output+="</table>";
+                }
+            });
             outputToChat(output); 
         },
         editPadDisplay = function(padid){
             let pad = getObj( "graphic" , padid ),
-            targettext = '',
-            output = ''
-            if(pad.get('bar1_max') !==''){
-                let targetlist = pad.get('bar1_max');
+            targettext = "",
+            output = "";
+            if(pad.get("bar1_max") !==""){
+                let targetlist = pad.get("bar1_max");
+                targetlist = arrayChecker(targetlist,"array");
                 if(Array.isArray(targetlist)){
                     let count = 0;
                     _.each(targetlist, function(targ){
                         if(count>0){
-                            targettext += ',';
+                            targettext += ",";
                         }
-                        targettext += getObj('graphic',targ).get('name');
-                        count++
+                        if(!getObj("graphic",targ)){
+                            targettext += "Invalid value";
+                        }else{
+                            targettext += getObj("graphic",targ).get("name");
+                        }
+                        count++;
                     });
                 }else{
-                    targettext += getObj('graphic',pad.get('bar1_max')).get('name');
+                    if(!getObj("graphic",pad.get("bar1_max"))){
+                        targettext += "Invalid value";
+                    }else{
+                        targettext += getObj("graphic",pad.get("bar1_max")).get("name");
+                    }
+                    
                 }
             }else{
-                targettext += 'not linked';
+                targettext += "not linked";
             }
-            output = ' <div style="' + boundingBoxStyles + '">'
-            + '<div style="' + headingAreaStyles + '">';
-            output +='<table style="padding: none;"><tr><td width="90%">Pad Edit</td><td>' + emojiButtonBuilder( {param:'Teleport Pad List',apicall:'padlist',icon:'portal'} ) + '</td></tr></table>';
-            output +='</div><table style="border:1px solid black;width:100%">';
-            output += '<tr><td style="text-align:left;font-weight:bold;">' + pad.get('name') + '</td><td>' + emojiButtonBuilder( {param:'Rename Token',apicall:'renamepad ?{Pad Name|'+ pad.get('name') +'}|' + pad.get('_id'), icon:'editname'} ) + '</td></tr>';
-            output += '<tr><td>Ping</td><td>' + emojiButtonBuilder( {param:'Ping Pad',apicall:'pingpad|' + pad.get('_id'),icon:'ping'} ) + '</td></tr>';
+            output = " <div style=\"" + boundingBoxStyles + "\">" + "<div style=\"" + headingAreaStyles + "\">";
+            output +="<table style=\"padding: none;\"><tr><td width=\"90%\">Pad Edit</td><td>" + emojiButtonBuilder( "Teleport Pad List","padlist","portal" ) + "</td></tr></table>";
+            output +="</div><table style=\"border:1px solid black;width:100%\">";
+            output += "<tr><td style=\"text-align:left;font-weight:bold;\">" + pad.get("name") + "</td><td>" + emojiButtonBuilder( "Rename Token","renamepad ?{Pad Name|"+ pad.get("name") +"}|" + pad.get("_id"), "editname" ) + "</td></tr>";
+            output += "<tr><td>Ping</td><td>" + emojiButtonBuilder( "Ping Pad","pingpad|" + pad.get("_id"),"ping" ) + "</td></tr>";
             
-            output += '<tr><td>SFX:' + ((pad.get('bar2_value') !== '')?pad.get('bar2_value'):'none');
-            output += '</td><td>' + emojiButtonBuilder( {param:'Show SFX',apicall:'showpdsfx|' + pad.get('_id'),icon:'active'} ) + '</td></tr>';
-            output += '<tr><td>';
-            let sfxapicall = 'editpdsfx ?{Special Effects Shape|bomb|bubbling|burn|burst|explode|glow|missile|nova|none}-' + 
-            '?{Special Effects Color|acid|blood|charm|death|fire|frost|holy|magic|slime|smoke|water}' + '|' + pad.get('_id');
-            //let apicall = 'editpadsfx ?{Options|Choose one:,&#63;{Choose an option&#124;Try again.&#124;A&#124;B&#124;C&#124;D&#124;E&#124;F&#124;G&#125;|A|B|C|D|E|F|G} |' + pad.get('_id');
-            output += standardButtonBuilder({param:'Set Pad SFX',apicall:sfxapicall,icon:'teleportall'}) + '</td><td></td></tr>';
+            output += "<tr><td>SFX:" + ((pad.get("bar2_value") !== "")?pad.get("bar2_value"):"none");
+            output += "</td><td>" + emojiButtonBuilder( "Show SFX","showpdsfx|" + pad.get("_id"),"active" ) + "</td></tr>";
+            output += "<tr><td>";
+            let sfxapicall = "editpdsfx ?{Special Effects Shape|bomb|bubbling|burn|burst|explode|glow|missile|nova|none}-" + 
+            "?{Special Effects Color|acid|blood|charm|death|fire|frost|holy|magic|slime|smoke|water}" + "|" + pad.get("_id");
+            output += standardButtonBuilder("Set Pad SFX",sfxapicall,"teleportall") + "</td><td></td></tr>";
             
-            output += '<tr><td>Message:</td><td>' + emojiButtonBuilder( {param:'Show Message',apicall:'showpdmsg|' + pad.get('_id'),icon:'message'} ) + '</td></tr>';
-            output += '<tr><td colspan="2">' + ((pad.get('bar2_max') !== '')?pad.get('bar2_max'):'none') + '</td></tr><tr><td colspan="2">';
-            let msgapicall = 'editpdmsg ?{Activation Message|' + ((pad.get('bar2_max') !== '')?pad.get('bar2_max'):'none') + '}' + '|' + pad.get('_id');
-            //let apicall = 'editpadsfx ?{Options|Choose one:,&#63;{Choose an option&#124;Try again.&#124;A&#124;B&#124;C&#124;D&#124;E&#124;F&#124;G&#125;|A|B|C|D|E|F|G} |' + pad.get('_id');
-            output += standardButtonBuilder({param:'Set Pad Message',apicall:msgapicall,icon:'message'}) 
-            output += '</td></tr>';
+            output += "<tr><td>Message:</td><td>" + emojiButtonBuilder( "Show Message","showpdmsg|" + pad.get("_id"),"message" ) + "</td></tr>";
+            output += "<tr><td colspan=\"2\">" + ((pad.get("bar2_max") !== "")?pad.get("bar2_max"):"none") + "</td></tr><tr><td colspan=\"2\">";
+            let msgapicall = "editpdmsg ?{Activation Message|" + ((pad.get("bar2_max") !== "")?pad.get("bar2_max"):"none") + "}" + "|" + pad.get("_id");
+            output += standardButtonBuilder("Set Pad Message",msgapicall,"message");
+            output += "</td></tr>";
             
-            output += '<tr><td><div style="float:left;">Keys:</div>' + renderTokenList(getTokens(pad)) + '</td><td>' + emojiButtonBuilder( {param:'Show Keys',apicall:'showpdkeys|' + pad.get('_id'),icon:'key'} ) + '</td></tr>';
+            output += "<tr><td><div style=\"float:left;\">Keys:</div>" + renderTokenList(getTokens(pad)) + "</td><td>" + emojiButtonBuilder( "Show Keys","showpdkeys|" + pad.get("_id"),"key" ) + "</td></tr>";
             //
-            output += '<tr><td>Teleport Token To</td><td>' + emojiButtonBuilder( {param:'Teleport Token',apicall:'teleporttoken|' + pad.get('_id'),icon:'teleport'} ) + '</td></tr>';
-            if(pad.get('status_dead')){
-                output += '<tr><td>Status: Locked</td><td>' + emojiButtonBuilder( {param:'Unlock Pad',apicall:'lockpad|' + pad.get('_id'),icon:'locked'} ) + '</td></tr>';
+            output += "<tr><td>Teleport Token To</td><td>" + emojiButtonBuilder( "Teleport Token","teleporttoken|" + pad.get("_id"),"teleport" ) + "</td></tr>";
+            if(pad.get("status_dead")){
+                output += "<tr><td>Status: Locked</td><td>" + emojiButtonBuilder( "Unlock Pad","lockpad|" + pad.get("_id"),"locked" ) + "</td></tr>";
             }else{
-                output += '<tr><td>Status: Unlocked</td><td>' + emojiButtonBuilder( {param:'Lock Pad',apicall:'lockpad|' + pad.get('_id'),icon:'unlocked'} ) + '</td></tr>';
+                output += "<tr><td>Status: Unlocked</td><td>" + emojiButtonBuilder( "Lock Pad","lockpad|" + pad.get("_id"),"unlocked" ) + "</td></tr>";
             }
-            if(pad.get('fliph')){
-                output += '<tr><td>Multi-Link: Select</td><td>' + emojiButtonBuilder( {param:'Set Random Pad',apicall:'selectpadset|' + pad.get('_id'),icon:'select'} ) + '</td></tr>';
+            if(pad.get("fliph")){
+                output += "<tr><td>Multi-Link: Select</td><td>" + emojiButtonBuilder( "Set Random Pad","selectpadset|" + pad.get("_id"),"select" ) + "</td></tr>";
             }else{
-                output += '<tr><td>Multi-Link: Random</td><td>' + emojiButtonBuilder( {param:'Set Select Pad',apicall:'selectpadset|' + pad.get('_id'),icon:'random'} ) + '</td></tr>';
+                output += "<tr><td>Multi-Link: Random</td><td>" + emojiButtonBuilder( "Set Select Pad","selectpadset|" + pad.get("_id"),"random" ) + "</td></tr>";
             }
-            output += '<tr><td>Link Pad</td><td>' + emojiButtonBuilder( {param:'Link Pad',apicall:'linkpad|' + pad.get('_id'),icon:'linked'} ) + '</td></tr>';
-            output += '<tr><td style="text-align:left;border-bottom:1px solid black;" colspan="2"> linked to: ';
+            output += "<tr><td>Link Pad</td><td>" + emojiButtonBuilder( "Link Pad","linkpad|" + pad.get("_id") + "|edit","linked" ) + "</td></tr>";
+            output += "<tr><td style=\"text-align:left;border-bottom:1px solid black;\" colspan=\"2\"> linked to: ";
             output += targettext;
-            output += '</td></tr>';
-            output +='</table></div>';
+            output += "</td></tr>";
+            output +="</table></div>";
             outputToChat(output); 
         },
         editPadTokenDisplay = function(padid){
             let pad = getObj( "graphic" , padid ),
-            tokenlist = [],
-            output = '';
-            output = ' <div style="' + boundingBoxStyles + '">'
-            + '<div style="' + headingAreaStyles + '">';
-            output +='<table style="padding: none;"><tr><td width="90%">Pad Keys Edit</td><td>' + emojiButtonBuilder( {param:'Edit Pad',apicall:'editpad|' + pad.get('_id'),icon:'edit'} ) + '</td></tr></table>';
-            output +='</div><table style="border:1px solid black;width:100%">';
-            output +='<tr>';
-            output += '<td ">';
+            output = "";
+            output = " <div style=\"" + boundingBoxStyles + "\">" + "<div style=\"" + headingAreaStyles + "\">";
+            output +="<table style=\"padding: none;\"><tr><td width=\"90%\">Pad Keys Edit</td><td>" + emojiButtonBuilder( "Edit Pad","editpad|" + pad.get("_id"),"edit" ) + "</td></tr></table>";
+            output +="</div><table style=\"border:1px solid black;width:100%\">";
+            output +="<tr>";
+            output += "<td>";
             output += getAllTokensSelect(getTokens(pad,true),pad); 
-            output += '</td>';
-            output += '</tr></table></div>';
+            output += "</td>";
+            output += "</tr></table></div>";
             outputToChat(output);
         },
         // Menu support functions (used to construct repeating sections of )
-        getTokens = function(obj, mode){
-            let stringtokenlist = obj.get("statusmarkers").split(','), results=[],chatMessage='';
+        getTokens = function(obj /*, mode */ ){
+            let stringtokenlist = obj.get("statusmarkers").split(","), results=[];
             _.each(TOKENMARKERS, tokenmarker =>{
                _.each(stringtokenlist, marker => {
                     if(tokenmarker.name.toLowerCase() === marker) results.push(tokenmarker);
@@ -328,20 +442,19 @@
            return results;
         },
         renderTokenList = function(results, mode){
-            let msg='';
+            let msg="";
             _.each(results, marker => {
                 msg += renderTokens(marker, mode);
             });
             return msg;
-        }
+        },
         getAllTokensSelect = function(tokenset, pad){
-            let outputtext = '';
+            let outputtext = "";
             _.each(TOKENMARKERS, tokenmarker =>{
                 let isactive = false;
                _.each(tokenset, marker => {
                     if(tokenmarker.name.toLowerCase() === marker.name) {
-                        isactive = true;//results.push(tokenmarker);
-                        // log("Found to be True for " + tokenmarker.name.toLowerCase() + ":" + marker);
+                        isactive = true;
                     }
                 });
                 
@@ -349,27 +462,30 @@
            });
            return outputtext;
         },
-        renderTokens = function(token,mode){
-            let returnText =  '<div style="width:20px;height:20px;float:left;margin:.3em;"><img src="' + token.url + '" alt="' + token.name + '" style="width:100%;height:100%;object-fit:contain;'; 
-                // returnText += ((mode)?'border-radius:50%;background-color:#ccc;':'');
-                returnText += '"></div>';
+        renderTokens = function(token /*,mode */ ){
+            let returnText =  "<div style=\"width:20px;height:20px;float:left;margin:.3em;\"><img src=\"" + token.url + "\" alt=\"" + token.name + "\" style=\"width:100%;height:100%;object-fit:contain;"; 
+                // returnText += ((mode)?"border-radius:50%;background-color:#ccc;":");
+                returnText += "\"></div>";
             return returnText;
         },
-        teleportSelectList = function(params){
-            let pad=params.pad,obj=params.obj;
-            let returntext = '?{Select a Destination';
-            if(pad.get('bar1_max') !==''){
-                let targetlist = pad.get('bar1_max');
+        teleportSelectList = function(obj,pad){
+            let returntext = "?{Select a Destination";
+            if(pad.get("bar1_max") !==""){
+                let targetlist = pad.get("bar1_max");
+                targetlist = arrayChecker(targetlist,"array");
                 if(Array.isArray(targetlist)){
                     _.each(targetlist, function(targ){
-                        if(!checkTokenMarkerMatch(obj,getObj('graphic',targ))){return};
-                        returntext += '|' + getObj('graphic',targ).get('name') + ',' + getObj('graphic',targ).get('_id');
+                        if(!checkTokenMarkerMatch(obj,getObj("graphic",targ))){
+                            return;
+                        }
+                        returntext += "|" + getObj("graphic",targ).get("name") + "," + getObj("graphic",targ).get("_id");
                     });
-                    returntext += '}';
+                    returntext += "}";
                 }
             }
-            let player = findTokenPlayer({pad:pad,obj:obj});
-            outputToChat(configButtonBuilder( {param:'Select Destination',apicall:'teleporttoken|' + returntext,icon:'teleport'} ), player.get('_displayname'));
+            let player = findTokenPlayer(obj,pad);
+            if(player === null){player=DEFAULTPLAYER;}
+            outputToChat(configButtonBuilder( "Select Destination","teleporttoken|" + returntext + "|" + obj.get("id") ,"teleport" ), player.get("_displayname"));
 
         },
         // This check is exclusively for auto-teleport, and never occurs
@@ -386,29 +502,39 @@
             //   - If hypotenuse is greater than radius 1 + radius 2, they are not overlapping.
             // Disadvantage: not as accurate as square-overlap
             // Advantage: feels more realistic given that most tokens are not square with transparency.
-            let objrad = (obj.get('width') + obj.get('height'))/4; 
+            let objrad = (obj.get("width") + obj.get("height"))/4; 
             
-            var padList = teleportPadList();
+            let padList = teleportPadList(obj.get("_pageid"));
             _.each(padList, function(pad){
-                if(pad.get('status_dead') === true){
+                if(pad.get("status_dead") === true){
                     return;
                 }
-                let padrad = (pad.get('width') + pad.get('height'))/4,
-                hypot = Math.ceil(Math.sqrt(Math.pow((pad.get('left') - obj.get('left')),2) + Math.pow((pad.get('top') - obj.get('top')),2)));
-                // log("hypot:" + hypot + " | objrad:" + objrad + " | padrad:" + padrad + " | test:" + (hypot < (objrad+padrad)));
+                let padrad = (pad.get("width") + pad.get("height"))/4,
+                hypot = Math.ceil(Math.sqrt(Math.pow((pad.get("left") - obj.get("left")),2) + Math.pow((pad.get("top") - obj.get("top")),2)));
                 if(hypot < (objrad+padrad)){
                     if(!checkTokenMarkerMatch(obj,pad)){
                         return;
                     }
-                    teleportMsg({pad:pad,tgt:obj});
-                    let targetlist = pad.get('bar1_max');
-                    if(Array.isArray(targetlist) && pad.get('fliph') === true && targetlist.length > 1){
-                        teleportSelectList({pad:pad,obj:obj});
+                    // here's where we check if their lastmove is in the same range.. 
+                    if(obj.get("lastmove") !== ""){
+                        let lastmovearray = obj.get("lastmove").split(",");
+                        let lastx = lastmovearray[0],lasty = lastmovearray[1];
+                        let lasthypot = Math.ceil(Math.sqrt(Math.pow((pad.get("left") - lastx),2) + Math.pow((pad.get("top") - lasty),2) ) );
+                        if(lasthypot < objrad+padrad){
+                            // object moved from a spot within this teleport pad, and should not be teleported.
+                            return;
+                        }
+                    }
+                    teleportMsg(pad,obj);
+                    let targetlist = pad.get("bar1_max");
+                    targetlist = arrayChecker(targetlist,"array");
+                    if(Array.isArray(targetlist) && pad.get("fliph") === true && targetlist.length > 1){
+                        teleportSelectList(obj,pad);
                         return;
                     }
                     let nextpad = teleportAutoNextTarget(pad);
                     if(nextpad){
-                        teleportToken({obj:obj,pad:nextpad});
+                        teleportToken(obj,nextpad);
                     }
                 }else{
                     return;
@@ -416,356 +542,672 @@
             });
         },
         checkTokenMarkerMatch = function(obj,pad){
-            log('In checkTokenMarkerMatch');
-            if(pad.get('statusmarkers') === ''){ return true }
-            let foundInBoth = _.intersection(obj.get('statusmarkers').split(','), pad.get('statusmarkers').split(','));
-            let conclusion = _.difference(pad.get('statusmarkers').split(','), foundInBoth);
-            if((conclusion[0] === '' && conclusion.length === 1) || conclusion.length === 0){
+            if(pad.get("statusmarkers") === ""){ 
+                return true; 
+            }
+            let foundInBoth = _.intersection(obj.get("statusmarkers").split(","), pad.get("statusmarkers").split(","));
+            let conclusion = _.difference(pad.get("statusmarkers").split(","), foundInBoth);
+            if((conclusion[0] === "" && conclusion.length === 1) || conclusion.length === 0){
                 return true;
             }else{
                 return false;
             }
         },
         teleportAutoNextTarget = function(pad){
-            // in case of accidental self-reference, just don't teleport 
+            // in case of accidental self-reference, just don"t teleport 
             // this will include the randomizer - thining of whether to include inactivated portals... 
-            if(pad.get('bar1_max') === ''){ return null };
-            let targetlist = pad.get('bar1_max'),pickedpad,count=0,randnum=0;
+            if(pad.get("bar1_max") === ""){ 
+                return null; 
+            }
+            let targetlist = pad.get("bar1_max"),pickedpad,count=0;
+            targetlist = arrayChecker(targetlist,"array");
             if(Array.isArray(targetlist)){
                 let randnum = Math.floor(Math.random()*targetlist.length);
                 _.each(targetlist, function(targ){
                     
                     if(randnum === count){
-                        pickedpad = getObj('graphic',targ);
+                        pickedpad = getObj("graphic",targ);
                     }
                     count++;
                 });
             }else{
-                 pickedpad = getObj('graphic',targetlist);
+                 pickedpad = getObj("graphic",targetlist);
             }
             return pickedpad;
         },
-        teleportPadList = function(){
-            var currentPageId = Campaign().get('playerpageid');
-            var rawList = findObjs({_subtype:'token',layer:'gmlayer'}),
+        teleportPadList = function(pageid){
+            let currentPageId = pageid || Campaign().get("playerpageid");
+            let rawList = findObjs({_subtype:"token",layer:"gmlayer"}),
             padList = [];
             _.each(rawList, function(padCheck){
-              if(typeof padCheck.get('bar1_value') !== 'string'){
+              if(typeof padCheck.get("bar1_value") !== "string"){
                   return;
               }
-              if( padCheck.get('bar1_value').indexOf('teleportpad') === 0 && padCheck.get('_pageid') === currentPageId){
+              if( padCheck.get("bar1_value").indexOf("teleportpad") === 0 && padCheck.get("_pageid") === currentPageId){
                   padList.push(padCheck);
               }
-            })
+            });
             return padList;
         },
-        teleportToken = function(params){
-            let obj = params.obj, pad = params.pad;
-            obj.set("layer","gmlayer")
+        globalTeleportPadList = function(){
+            let currentPageId = Campaign().get("playerpageid");
+            let rawList = findObjs({_subtype:"token",layer:"gmlayer"}),
+            padList = {[currentPageId]:[]};
+            _.each(rawList, function(padCheck){
+              if(typeof padCheck.get("bar1_value") !== "string"){
+                  return;
+              }
+              if( padCheck.get("bar1_value").indexOf("teleportpad") === 0){
+                  if(!padList[padCheck.get("_pageid")]){
+                      padList[padCheck.get("_pageid")] = [];
+                  }
+                  padList[padCheck.get("_pageid")].push(padCheck);
+              }
+            });
+            return padList;
+        },
+        globalLimboList = function(){
+            let currentPageId = Campaign().get("playerpageid");
+            let rawList = findObjs({_subtype:"token",layer:"gmlayer"}),
+            tokenList = {[currentPageId]:[]};
+            _.each(rawList, function(token){
+              let foundPlayer = findTokenPlayer(token,null);
+              if(foundPlayer){
+                  if(!tokenList[token.get("_pageid")]){
+                      tokenList[token.get("_pageid")] = [];
+                  }
+                  tokenList[token.get("pageid")].push(token);
+              }
+            });
+            return tokenList;
+        },
+        sendToLimbo = function(obj){
+            obj.set({
+                layer:"gmlayer",
+                left: 35,
+                top: 35
+            });
+        },
+       
+        limboSwap = function(obj, pageid){
+            let foundPlayerObj;
+            // If the token has *no associated character sheet, stop and reject*
+            // We are going to try a *new* method of checking to see if a named object exists on the associated page, so 
+            // uniquely named graphics can still teleport. But unnamed or not-uniquely named sheet-less graphics cannot teleport. 
+            // prevent teleport pads from being teleported
+            if(typeof obj.get("bar1_value") === "string"){
+                if(obj.get("bar1_value").indexOf("teleportpad") !== -1){
+                    //log("Tried to teleport a teleport pad");
+                    return false;
+                }
+            }
+              
+            
+            if(obj.get("represents") === "" && obj.get("name") === ""){
+                return false;
+            }
+            
+            
+            // we check to see if in a list of objects there is an associated object that shares the same character sheet
+            let destPageTokenSet = findObjs({ type:"graphic", _pageid:pageid });
+            _.each( destPageTokenSet, function(pageobj){
+               if(obj.get("represents") === pageobj.get("represents")){
+                   if(obj.get("name") === pageobj.get("name")){
+                        foundPlayerObj = pageobj;
+                        sendToLimbo(obj);
+                        return false;
+                   }
+               } 
+            });
+            
+            // We didn't find an object that matched on the target page, so we try two methods to create a new token - one new, one old
+            if(!foundPlayerObj){
+                try{
+                    let newToken = obj.createCopy({pageid:pageid});
+                    if(newToken){
+                        foundPlayerObj = newToken;
+                        sendToLimbo(obj);
+                    }
+               }catch(err){
+                   //log("createCopy:" + err);
+                    try{
+                        let props = JSON.parse(JSON.stringify(obj));
+                        delete props._id;
+                        delete props._pageid;
+                        // delete other props you don't want
+                        let newToken=createObj('graphic', {
+                           ...props,
+                          pageid: pageid,
+                          // other props
+                        });
+                        if(newToken){
+                            foundPlayerObj = newToken;
+                            sendToLimbo(obj);
+                        }
+                    }catch(err){
+                        //log("createObj:" + err)
+                    } 
+               }
+            }else{
+                foundPlayerObj.set("statusmarkers", obj.get("statusmarkers"));
+            }
+            
+            if(foundPlayerObj){
+                reconcileTargetPageId(playerControllers(foundPlayerObj), pageid);
+                //log(obj.get("statusmarkers"));
+                return foundPlayerObj;
+            }
+            
+            return false;
+        },
+        reconcileTargetPageId = function(players,targetpageid){
+            let props = Campaign().get('playerspecificpages')||{};
+            if(targetpageid === Campaign().get('playerpageid')){
+                players.forEach(p=>{
+                    if((getObj("player",p)||{get:()=>{}}).get("_online")){
+                        props[p] = targetpageid;
+                    }
+                });
+            } else {
+                players.forEach(p=>{
+                    if((getObj("player",p)||{get:()=>{}}).get("_online")){
+                        props[p] = targetpageid;
+                    }
+                });
+            }
+            Campaign().set('playerspecificpages',props);
+            setTimeout(()=>{
+                //players.forEach(p=>{
+                //        delete props[p]
+                //});
+                Campaign().set('playerspecificpages',false);
+                Campaign().set('playerspecificpages',props);
+            },100);
+        },
+        teleportToken = function(obj,pad){
+            var charobj = getObj('character',obj.get('represents'));
+            if(obj.get("_pageid") !== pad.get("_pageid")){
+                // do page to page teleport instead
+                // So, for instance, we replace obj
+                // with a new reference from the correct page context,
+                // function limboswap, getlimboref, etc.
+                // So put the referenced object in cold storage
+                // and return the reference from the proper page. 
+                // and move the individual player ribbon... 
+                // for now we notice it"s a different page and stop. 
+                obj = limboSwap(obj, pad.get("_pageid"));
+                if(obj === false){
+                    outputToChat("Nobody found in Limbo that matches on that page. Teleport cancelled.");
+                    return false;
+                }
+            }
+            obj.set("layer","gmlayer");
             setTimeout(function(){
-                obj.set("left",pad.get('left'));
-                obj.set("top",pad.get('top'));
+                obj.set("left",pad.get("left"));
+                obj.set("top",pad.get("top"));
+                
                 setTimeout(function(){
                     obj.set("layer","objects");
                     if(Teleport.configparams.AUTOPING){
-                        teleportPing({obj:obj,pad:pad});
+                        teleportPing(obj,pad);
                     }
                     if(Teleport.configparams.SHOWSFX){
-                        teleportSFX({obj:obj,pad:pad});
+                        teleportSFX(obj,pad);
                     }
+                    obj.set("lastmove","");
                 },500);
             },100);
         },
-        teleportPing = function(params){
-            let obj=params.obj, pad=params.pad, player, oldcolor;
+        teleportPing = function(obj,pad){
+            let player, oldcolor;
             // figure out if there is a player attached
             if(Teleport.configparams.HIDEPING){
-                player = findTokenPlayer({obj:obj,pad:pad});
-                oldcolor = player.get('color');
-                player.set('color','transparent');
+                player = findTokenPlayer(obj,pad);
+                if(!player){
+                    player=DEFAULTPLAYER;
+                }
+                oldcolor = player.get("color");
+                player.set("color","transparent");
                 setTimeout(function(){
-                    sendPing(pad.get('left'), pad.get('top'), Campaign().get('playerpageid'), player.id, true, player.id);
+                    sendPing(pad.get("left"), pad.get("top"), pad.get("_pageid"), player.id, true, player.id);
                     setTimeout(function(){
-                        player.set('color',oldcolor);
+                        player.set("color",oldcolor);
                     },1000);
-                },10)
-                
-            }
-        },
-        teleportSFX = function(params){
-            let pad = params.pad;
-            if(pad.get('bar2_value') !== ''){
-                setTimeout(function(){
-                    spawnFx(pad.get('left'), pad.get('top'), pad.get('bar2_value'), Campaign().get('playerpageid'));
                 },10);
             }
         },
-        teleportMsg = function(params){
-            let pad = params.pad, tgt=params.tgt, msg='';
-            if(pad.get('bar2_max') !== ''){
-                msg = pad.get('bar2_max').replace('[target]',tgt.get('name'));
+        teleportSFX = function(obj,pad){
+            if(pad.get("bar2_value") !== ""){
+                setTimeout(function(){
+                    spawnFx(pad.get("left"), pad.get("top"), pad.get("bar2_value"), pad.get("_pageid"));
+                },10);
+            }
+        },
+        teleportMsg = function(pad,tgt){
+            let msg="";
+            if(pad.get("bar2_max") !== ""){
+                msg = pad.get("bar2_max").replace("[target]",tgt.get("name"));
                 outputOpenMessage(msg);
             }
         },
-        findTokenPlayer=function(params){
-            let obj=params.obj,pad=params.pad, character, controller;
-            character=(obj.get('represents'))?getObj("character", obj.get('represents')):null;
-            controller = (character)?character.get('controlledby'):'';
-                if(controller !== '' && controller !== 'all' ){
+        playerControllers = (obj) => {
+            if('' !== obj.get('represents') ) {
+                return (getObj('character',obj.get('represents')) || {get: function(){return '';} } )
+                .get('controlledby').split(/,/)
+                .filter(s=>s.length);
+            }
+            return obj.get('controlledby')
+            .split(/,/)
+            .filter(s=>s.length);
+        },
+        findTokenPlayer=function(obj /*,pad*/){
+            if(typeof obj === "undefined"){
+                return null;
+            }
+            let character, controller,player;
+            character=(obj.get("represents"))?getObj("character", obj.get("represents")):null;
+            controller = (character)?character.get("controlledby"):"";
+                if(controller !== "" && controller !== "all" && controller.split(",").length === 1 ){
                     player=getObj("player", controller);
                 }else{
-                    player=DEFAULTPLAYER;
+                    player=null;
                 }
-            return player
+            return player;
         },
-        addPortalPadLink = function(params){
-            let pad=params.pad,linktargetids=params.linktargetids,completelinklist=[];
-            _.each(linktargetids, function(linktarg){
-                if(pad.get('_id') === linktarg._id){
-                    outputToChat("A portal pad cannot target itself.");
-                    return
+        cleanUpLinkCheck = function(obj){
+            if(obj.get("bar1_value") === "teleportpad"){
+                // first we get the global teleport pad list
+                // then we roll through each one to check for this token's id
+                let output = "";
+                output+= "<p>The teleport pad called " + obj.get("name") + " has been deleted.</p><p>Do you want to remove all references to it from all teleport pads?</p>";
+                output+= "<p>" + standardButtonBuilder( "Remove Pad References ","purgetokenid|" + obj.get("_id"),"error") + "</p>";
+                outputToChat(output);
+            }
+        },
+        purgeTokenId = function(deletedpadid){
+            //log(deletedpadid);
+            let outputtext = "";
+            let completeList = globalTeleportPadList();
+            let removedcount = 0;
+            _.each(completeList, function(pageTokenArray /*,key*/ ){
+                if(Array.isArray(pageTokenArray) && pageTokenArray.length > 0){
+                    _.each(pageTokenArray, function(token){
+                        if(token.get("bar1_max") !== ""){
+                            let targetlist = token.get("bar1_max");
+                            targetlist = arrayChecker(targetlist,"array");
+                            if(Array.isArray(targetlist)){
+                                if(_.indexOf(targetlist,deletedpadid) !== -1){
+                                    targetlist = _.without(targetlist,deletedpadid);
+                                    targetlist = arrayChecker(targetlist,"stringify");
+                                    token.set("bar1_max", targetlist);
+                                    removedcount++;
+                                }
+                            }else{
+                                targetlist = arrayChecker(targetlist,"array");
+                                if(_.indexof(targetlist,deletedpadid) !== -1){
+                                    token.set("bar1_max","");
+                                    removedcount++;
+                                }
+                            }
+                        }
+                    });
                 }
-                let obj = getObj('graphic',linktarg._id);
-                    if(obj.get('bar1_value') === 'teleportpad'){
-                           completelinklist.push(obj.get('_id'));
+            });
+            outputtext += "<p>" + removedcount + " token references removed.</p>";
+            outputtext += "<p>" + standardButtonBuilder("Main Menu","menu","help") + "</p>";
+            outputToChat(outputtext);
+        },
+        addPortalPadLink = function(pad, linktargetids, type){
+            let completelinklist=[];
+            if(type==="add"){
+                completelinklist = arrayChecker(pad.get("bar1_max"),"array")||[];
+            }
+            if(!Array.isArray(completelinklist)){
+                completelinklist = arrayChecker(pad.get("bar1_max"),"array");
+            }
+            _.each(linktargetids, function(linktarg){
+                if(pad.get("_id") === linktarg._id){
+                    if(linktargetids.length === 1){outputToChat("A portal pad cannot target itself.");}
+                    return;
+                }
+                let obj = getObj("graphic",linktarg._id);
+                    if(obj.get("bar1_value") === "teleportpad"){
+                        if(_.indexOf(pad.get("bar1_max"),linktarg._id) === -1){
+                           completelinklist.push(obj.get("_id"));
+                        }
                     }else{
                     outputToChat("A Link target for autoteleport needs to also be a teleport pad.");
                 }
             });
-            pad.set("bar1_max",completelinklist);
+            pad.set("bar1_max",arrayChecker(completelinklist,"stringify"));
         },
-        editPadSFX = function(params){
-            let pad = getObj('graphic',params.pad), sfx=params.sfx;
-            if(sfx && sfx.indexOf('none') !== -1){
-               sfx=''; 
+        editPadSFX = function(padid, sfx){
+            let pad = getObj("graphic",padid);
+            if(sfx && sfx.indexOf("none") !== -1){
+               sfx=""; 
             }
-            pad.set('bar2_value',sfx);
-            editPadDisplay(pad.get('_id'));
+            pad.set("bar2_value",sfx);
+            editPadDisplay(padid);
         },
-        showPadSFX = function(params){
-            let pad = getObj('graphic',params.pad);
-            if(pad.get('bar2_value') !== ''){
-                // log(pad.get('bar2_value'));
-                spawnFx(pad.get('left'), pad.get('top'), pad.get('bar2_value'), Campaign().get('playerpageid'));
+        showPadSFX = function(padid){
+            let pad = getObj("graphic",padid);
+            if(pad.get("bar2_value") !== ""){
+                spawnFx(pad.get("left"), pad.get("top"), pad.get("bar2_value"), pad.get("pageid"));
             }
         },
-        editPadMsg = function(params){
-            let pad = getObj('graphic',params.pad), msg=params.msg;
-            if(msg && msg.indexOf('none') !== -1){
-               msg=''; 
+        editPadMsg = function(padid, msg){
+            let pad = getObj("graphic",padid);
+            if(msg && msg.indexOf("none") !== -1){
+               msg=""; 
             }
-            pad.set('bar2_max',msg);
-            editPadDisplay(pad.get('_id'));
+            pad.set("bar2_max",msg);
+            editPadDisplay(padid);
         },
-        showPadMsg = function(params){
-            let pad = params.pad,tgt=params.obj;
-            if(pad.get('bar2_max') !== ''){
-                msg = pad.get('bar2_max').replace('[target]',tgt.get('name'));
+        showPadMsg = function(tgt, pad){
+            let msg;
+            if(pad.get("bar2_max") !== ""){
+                msg = pad.get("bar2_max").replace("[target]",tgt.get("name"));
                 outputToChat(msg);
             }
         },
         msgHandler = function(msg){
-            
-            if(msg.type === 'api' && msg.content.indexOf('!teleport') === 0 ){
-                if(msg.content.indexOf('--help') !== -1){
+            if(msg.type === "api" && msg.content.indexOf("!teleport") === 0 ){
+                
+                if(msg.content.indexOf("--help") !== -1){
                     helpDisplay();
                 }
-                if(msg.content.indexOf('--menu') !== -1){
+                if(msg.content.indexOf("--menu") !== -1){
                     menuDisplay();
                 }
-                if(msg.content.indexOf('--config') !== -1){
+                if(msg.content.indexOf("--config") !== -1){
                     configDisplay();
                 }
-                if(msg.content.indexOf('--padlist') !== -1){
+                if(msg.content.indexOf("--padlist") !== -1){
                     padDisplay();
                 }
-                
-                if(msg.content.indexOf('--teleporttoken') !== -1){ 
-                    if(typeof msg.selected !== 'undefined'){
-                        let pad = getObj('graphic',msg.content.split('|')[1]);
-                        let obj = getObj('graphic',msg.selected[0]._id);
-                        teleportToken({obj:obj,pad:pad});
+                if(msg.content.indexOf("--globalpdlist") !== -1){
+                    padGlobalDisplay();
+                }
+                if(msg.content.indexOf("--globaltknlist") !== -1){
+                    limboDisplay();
+                }
+                if(msg.content.indexOf("--purgetokenid") !== -1){
+                    purgeTokenId(msg.content.split("|")[1]);
+                }
+                if(msg.content.indexOf("--teleporttoken") !== -1){ 
+                    if(typeof msg.selected !== "undefined"){
+                        let pad = getObj("graphic",msg.content.split("|")[1]);
+                        _.each(msg.selected, function(objid){
+                            let obj = getObj("graphic",objid._id);
+                            teleportToken(obj,pad);
+                        });
                     }else{
-                        outputToChat("Select a target token to teleport before clicking teleport.");
+                        let pad = getObj("graphic",msg.content.split("|")[1]);
+                        let obj = (msg.content.split("|")[2])?getObj("graphic",msg.content.split("|")[2]):null;
+                        if(obj !== null){
+                            teleportToken(obj,pad);
+                        }else{
+                            outputToChat("Select a target token to teleport before clicking teleport.");
+                        }
                     }
                 }
-                if(msg.content.indexOf('--linkpad') !== -1){ 
-                    let pad = getObj('graphic',msg.content.split('|')[1]);
-                    if(typeof msg.selected !== 'undefined'){
-                        addPortalPadLink({pad:pad,linktargetids:msg.selected});
+                if(msg.content.indexOf("--linkpad") !== -1){ 
+                    let pad = getObj("graphic",msg.content.split("|")[1]), returnmenu = msg.content.split("|")[2];
+                    if(typeof msg.selected !== "undefined"){
+                        addPortalPadLink(pad,msg.selected,"replace");
                     }else{
                         outputToChat("Clicking Link without selecting a token clears the teleport pad link.");
                         pad.set("bar1_max","");
                     }
-                    padDisplay();
-                }
-                
-                if(msg.content.indexOf('--createpad') !== -1){
-                    if(typeof msg.selected ==='undefined'){
-                        return outputToChat('Select a token to be the teleport pad.');
+                    if(returnmenu.indexOf("global") !== -1){
+                        padGlobalDisplay();
                     }
-                    let pad = getObj('graphic',msg.selected[0]._id);
-                    if(typeof pad ==='undefined'){
-                        return outputToChat('Only graphic tokens can be set to be a teleport pad.');
-                    }
-                    if(pad.get('_subtype') === 'card'){ return outputToChat("Select a target token that is not a card.")}
-                    if(pad.get('bar1_value') === 'teleportpad'){return outputToChat("Select a target token that is not already a teleport pad.")}
-                    if(pad.get('_pageid') !== Campaign().get('playerpageid')){
-                        let txt = 'You have created a teleport pad that is not on the Player Ribbon page.';
-                        txt += '\r It will not show up in the teleport pad list, and to see this pad on the list,';
-                        txt += ' you will have to move the player ribbon to this page, as right now teleport between pages is not enacted.'
-                        outputToChat(txt);
-                    }
-                    pad.set({
-                        layer:'gmlayer',
-                        bar1_value:'teleportpad',
-                        name: ((pad.get('name') === "")?msg.content.split('|')[1]:pad.get('name')),
-                        showname: true
-                    })
-                    padDisplay();
-                }
-                if(msg.content.indexOf('--renamepad') !== -1){
-                    let pad = getObj('graphic',msg.content.split('|')[1]);
-                    pad.set({
-                        name: msg.content.split('|')[0].split('--renamepad ')[1]
-                    })
-                    editPadDisplay(msg.content.split('|')[1]);
-                }
-                if(msg.content.indexOf('--editpad') !== -1){
-                    editPadDisplay(msg.content.split('|')[1]);
-                }
-                if(msg.content.indexOf('--editpdsfx') !== -1){
-                    editPadSFX( {pad:msg.content.split('|')[1],sfx:msg.content.split('|')[0].split(' ')[2]} );
-                }
-                if(msg.content.indexOf('--showpdsfx') !== -1){
-                    showPadSFX({pad:msg.content.split('|')[1]});
-                }
-                
-                if( msg.content.indexOf('--editpdmsg') !== -1){
-                    editPadMsg( { pad:msg.content.split('|')[1], msg:msg.content.split('|')[0].split('--editpdmsg ')[1]} );
-                }
-                
-                if(msg.content.indexOf('--showpdmsg') !== -1){
-                     if(typeof msg.selected !== 'undefined'){
-                        let pad = getObj('graphic',msg.content.split('|')[1]);
-                        let obj = getObj('graphic',msg.selected[0]._id);
-                        showPadMsg({pad:pad,obj:obj});
+                    else if(returnmenu.indexOf("edit") !== -1){
+                        editPadDisplay(msg.content.split("|")[1]);
                     }else{
-                       return outputToChat('Select a target token to test the teleport pad message.');
+                        padDisplay();
+                    }
+                }
+                if(msg.content.indexOf("--addlink") !== -1){ 
+                    let pad = getObj("graphic",msg.content.split("|")[1]), returnmenu = msg.content.split("|")[2];
+                    if(typeof msg.selected !== "undefined"){
+                        addPortalPadLink(pad,msg.selected,"add");
+                    }else{
+                        outputToChat("There was no pad selected to be added.");
+                    }
+                    if(returnmenu.indexOf("global") !== -1){
+                        padGlobalDisplay();
+                    }
+                    else if(returnmenu.indexOf("edit") !== -1){
+                        editPadDisplay(msg.content.split("|")[1]);
+                    }else{
+                        padDisplay();
                     }
                 }
                 
-                if(msg.content.indexOf('--lockportal') !== -1){
-                        let pad = getObj('graphic',msg.content.split('|')[1]);
-                        let currentstatus = pad.get('status_dead');
-                        pad.set('status_dead', (currentstatus)?false:true);
+                if(msg.content.indexOf("--createpad") !== -1){
+                    state.teleport.increment++;
+                    if(typeof msg.selected ==="undefined"){
+                        return outputToChat("Select a token to be the teleport pad.");
+                    }
+                    let pad = getObj("graphic",msg.selected[0]._id);
+                    if(typeof pad ==="undefined"){
+                        return outputToChat("Only graphic tokens can be set to be a teleport pad.");
+                    }
+                    if(pad.get("_subtype") === "card"){ 
+                        return outputToChat("Select a target token that is not a card.");
+                    }
+                    if(pad.get("bar1_value") === "teleportpad"){
+                        return outputToChat("Select a target token that is not already a teleport pad.");
+                    }
+                    if(pad.get("_pageid") !== Campaign().get("playerpageid")){
+                        //
+                    }
+                    pad.set({
+                        layer:"gmlayer",
+                        bar1_value:"teleportpad",
+                        name: ((pad.get("name") === "")?msg.content.split("|")[1]:pad.get("name")),
+                        showname: true
+                    });
+                    padDisplay();
+                }
+                if(msg.content.indexOf("--renamepad") !== -1){
+                    let pad = getObj("graphic",msg.content.split("|")[1]);
+                    pad.set({
+                        name: msg.content.split("|")[0].split("--renamepad ")[1]
+                    });
+                    editPadDisplay(msg.content.split("|")[1]);
+                }
+                if(msg.content.indexOf("--editpad") !== -1){
+                    editPadDisplay(msg.content.split("|")[1]);
+                }
+                if(msg.content.indexOf("--editpdsfx") !== -1){
+                    editPadSFX( msg.content.split("|")[1],msg.content.split("|")[0].split(" ")[2] );
+                }
+                if(msg.content.indexOf("--showpdsfx") !== -1){
+                    showPadSFX(msg.content.split("|")[1]);
+                }
+                
+                if( msg.content.indexOf("--editpdmsg") !== -1){
+                    editPadMsg( msg.content.split("|")[1], msg.content.split("|")[0].split("--editpdmsg ")[1] );
+                }
+                
+                if(msg.content.indexOf("--showpdmsg") !== -1){
+                     if(typeof msg.selected !== "undefined"){
+                        let pad = getObj("graphic",msg.content.split("|")[1]);
+                        let obj = getObj("graphic",msg.selected[0]._id);
+                        showPadMsg(obj,pad);
+                    }else{
+                       return outputToChat("Select a target token to test the teleport pad message.");
+                    }
+                }
+                
+                if(msg.content.indexOf("--lockportal") !== -1){
+                        let pad = getObj("graphic",msg.content.split("|")[1]);
+                        let currentstatus = pad.get("status_dead");
+                        pad.set("status_dead", (currentstatus)?false:true);
                         padDisplay();
                 }
-                if(msg.content.indexOf('--lockpad') !== -1){
-                        let pad = getObj('graphic',msg.content.split('|')[1]);
-                        let currentstatus = pad.get('status_dead');
-                        pad.set('status_dead', (currentstatus)?false:true);
-                        editPadDisplay(msg.content.split('|')[1]);
+                if(msg.content.indexOf("--lockpad") !== -1){
+                        let pad = getObj("graphic",msg.content.split("|")[1]);
+                        let currentstatus = pad.get("status_dead");
+                        pad.set("status_dead", (currentstatus)?false:true);
+                        editPadDisplay(msg.content.split("|")[1]);
                 }
-                if(msg.content.indexOf('--selectpadset') !== -1){
-                    let pad = getObj('graphic',msg.content.split('|')[1]);
-                        let currentstatus = pad.get('fliph');
-                        pad.set('fliph', (currentstatus)?false:true);
-                        editPadDisplay(msg.content.split('|')[1]);
+                if(msg.content.indexOf("--selectpadset") !== -1){
+                    let pad = getObj("graphic",msg.content.split("|")[1]);
+                        let currentstatus = pad.get("fliph");
+                        pad.set("fliph", (currentstatus)?false:true);
+                        editPadDisplay(msg.content.split("|")[1]);
                 }
-                if(msg.content.indexOf('--pingpad') !== -1){
-                        let pad = getObj('graphic',msg.content.split('|')[1]);
+                if(msg.content.indexOf("--pingpad") !== -1){
+                        let pad = getObj("graphic",msg.content.split("|")[1]);
                         setTimeout(function() {
-                            sendPing(pad.get('left'), pad.get('top'), Campaign().get('playerpageid'), null, true, DEFAULTPLAYER.get('_id'));
+                            sendPing(pad.get("left"), pad.get("top"), pad.get("pageid"), null, true, DEFAULTPLAYER.get("_id"));
                         }, 10);
                 }
-                if(msg.content.indexOf('--showpdkeys') !== -1){
-                        editPadTokenDisplay(msg.content.split('|')[1]);
+                if(msg.content.indexOf("--showpdkeys") !== -1){
+                        editPadTokenDisplay(msg.content.split("|")[1]);
                 }
-                if(msg.content.indexOf('--editpdkey') !== -1){
-                    let markerName = msg.content.split('|')[2].toLowerCase(),
-                    padID = msg.content.split('|')[1],
-                    currentmarkers;
+                if(msg.content.indexOf("--editpdkey") !== -1){
+                    let markerName = msg.content.split("|")[2].toLowerCase(),
+                    padID = msg.content.split("|")[1],
+                    currentMarkers,
                     obj = getObj("graphic", padID );
-                    currentMarkers = obj.get("statusmarkers").split(',');
+                    currentMarkers = obj.get("statusmarkers").split(",");
                     if(_.indexOf(currentMarkers, markerName) !== -1){
-                        currentMarkers = _.without(currentMarkers, markerName)
+                        currentMarkers = _.without(currentMarkers, markerName);
                     }else{
                         currentMarkers.push(markerName);
                     }
-                    obj.set("statusmarkers", currentMarkers.join(','));
-                    editPadTokenDisplay(msg.content.split('|')[1]);
+                    obj.set("statusmarkers", currentMarkers.join(","));
+                    editPadTokenDisplay(msg.content.split("|")[1]);
                 }
-                if(msg.content.indexOf('--autoteleport') !== -1){
+                if(msg.content.indexOf("--autoteleport") !== -1){
                     Teleport.configparams.AUTOTELEPORT = (Teleport.configparams.AUTOTELEPORT)?false:true;
-                    setStateParam('AUTOTELEPORT',Teleport.configparams.AUTOTELEPORT);
+                    setStateParam("AUTOTELEPORT",Teleport.configparams.AUTOTELEPORT);
                     configDisplay();
-                }else if(msg.content.indexOf('--autoping') !== -1){
+                }else if(msg.content.indexOf("--autoping") !== -1){
                     Teleport.configparams.AUTOPING = (Teleport.configparams.AUTOPING)?false:true;
-                    setStateParam('AUTOPING',Teleport.configparams.AUTOPING);
+                    setStateParam("AUTOPING",Teleport.configparams.AUTOPING);
                     configDisplay();
-                }else if(msg.content.indexOf('--hideping') !== -1){
+                }else if(msg.content.indexOf("--hideping") !== -1){
                     Teleport.configparams.HIDEPING = (Teleport.configparams.HIDEPING)?false:true;
-                    setStateParam('HIDEPING',Teleport.configparams.HIDEPING);
+                    setStateParam("HIDEPING",Teleport.configparams.HIDEPING);
                     configDisplay();
-                }else if(msg.content.indexOf('--showsfx') !== -1){
+                }else if(msg.content.indexOf("--showsfx") !== -1){
                     Teleport.configparams.SHOWSFX = (Teleport.configparams.SHOWSFX)?false:true;
-                    setStateParam('SHOWSFX',Teleport.configparams.SHOWSFX);
+                    setStateParam("SHOWSFX",Teleport.configparams.SHOWSFX);
                     configDisplay();
                 }
+                if(msg.content.indexOf("--purge") !== -1 && msg.content.indexOf("--purgetokenid") === -1){
+                    Campaign().set("playerspecificpages",{});
+                    outputToChat("PlayerSpecificPages Data Purged");
+                }
+                
             }
         
         },
         outputToChat = function(msg,tgt){
-            tgt = (tgt !== undefined && tgt !== null)?tgt:'gm';
-            sendChat('system','/w "' + tgt + '" ' + msg,null,{noarchive:true});
+            tgt = (tgt !== undefined && tgt !== null)?tgt:"gm";
+            sendChat("Teleport","/w \"" + tgt + "\" " + msg,null,{noarchive:true});
         },
-        outputOpenMessage = function(msg,tgt){
-            formattedmessage = '<div><div>' + msg + '</div></div>';
-            sendChat('Environment', formattedmessage);
+        outputOpenMessage = function(msg /*,tgt*/){
+            let formattedmessage = "<div><div>" + msg + "</div></div>";
+            sendChat("Environment", formattedmessage);
         },
         autoTeleportCheck = function(obj){
             if(Teleport.configparams.AUTOTELEPORT===false){
                 return;
             }
-            if(obj.get('_subtype') === "token" && obj.get('lastmove') !== '' && obj.get('layer') !== 'gmlayer' ){
-                teleportPadCheck(obj);
+            if(obj.get("_subtype") === "token" && obj.get("lastmove") !== "" && obj.get("layer") === "objects" ){
+                //log(obj.get("lastmove"));
+                if(checkLastMoveAgainstCurrentPosition(obj)){
+                    teleportPadCheck(obj);
+                }
+            }
+        },
+        checkLastMoveAgainstCurrentPosition = function(obj){
+            if(obj.get("lastmove") === ""){
+                return false;
+            }
+            return true;
+        },
+        // This is here to fix errors that accrued from trying to put a non-stringified array into a string-only field for tokens. 
+        // This function "fixes" arrays into either strings or arrays
+        arrayChecker = function(tokenarray, direction){
+            let returnarray;
+            if(direction==="stringify"){
+                if(Array.isArray(tokenarray)){
+                    returnarray = tokenarray
+                }else{
+                    if(tokenarray.indexOf(",") !== -1){
+                        returnarray = tokenarray.split(",");
+                    }else{
+                        returnarray = [];
+                        returnarray[0] = tokenarray;
+                    }
+                }
+                return JSON.stringify(returnarray);
+            }else{
+                try{
+                    returnarray = JSON.parse(tokenarray);
+                }catch(err){
+                    if(tokenarray.indexOf(",") !== -1){
+                        returnarray = tokenarray.split(",");
+                    }else{
+                        returnarray = [];
+                        returnarray[0] = tokenarray;
+                    }
+                }
+                return returnarray;
             }
         },
         RegisterEventHandlers = function() {
-            on('chat:message', msgHandler);
-            on('change:graphic', autoTeleportCheck);
+            on("chat:message", msgHandler);
+            on("change:graphic", autoTeleportCheck);
+            on("destroy:graphic", cleanUpLinkCheck);
+            
             DEFAULTPLAYER = (function(){
                                 let player;
                                 let playerlist = findObjs({                              
-                                      _type: "player",                          
+                                      _type: "player"
                                 });
                                 _.each(playerlist, function(obj) {    
                                   if(playerIsGM(obj.get("_id"))){
                                       player = obj;
-                                  };
+                                  }
                                 });
                                 return player;
                             })();
             TOKENMARKERS = JSON.parse(Campaign().get("token_markers"));
-            
-            if(!state.teleport.help || !getObj('handout',state.teleport.help)){
-    		    if(findObjs({type:'handout',name:'Teleport API'})[0]){
-    		        state.teleport.help = findObjs({type:'handout',name:'Teleport API'})[0].get('_id');
-    		    }else{
-    		        let content = helpDisplay(),
-    		        handout = createObj('handout',{
-                        name: 'Teleport API',
+            JUMPGATE = (['jumpgate'].includes(Campaign().get('release')))?true:false;
+            TOKENCOPY = '';
+            //log("JUMPGATE Status:"+JUMPGATE);
+            let helpoutput = "";
+            if(!state.teleport.help || !getObj("handout",state.teleport.help)){
+                if(findObjs({type:"handout",name:"Teleport API"})[0]){
+                    state.teleport.help = findObjs({type:"handout",name:"Teleport API"})[0].get("_id");
+                }else{
+                    let content = helpDisplay(),
+                    handout = createObj("handout",{
+                        name: "Teleport API",
                         inplayerjournals: "gm",
-                        controlledby: DEFAULTPLAYER.get('_id')
+                        controlledby: DEFAULTPLAYER.get("_id")
                     });
-                    state.teleport.help = handout.get('_id');
+                    state.teleport.help = handout.get("_id");
                     setTimeout(function(){
-                        handout.set('notes',content);
+                        handout.set("notes",content);
                     },0);
-    		    }
-    		}
-        };     
+                    helpoutput += "<p>" + rawButtonBuilder("Teleport API Handout", "http://journal.roll20.net/handout/" + handout.get("_id"),"menu") + "</p>";
+                    // have to add chat call here to point to API handout instead of giant blob help. 
+                }
+            }
+            helpoutput += "<p>"+ standardButtonBuilder("Teleport Main Menu","menu","help") +"</p>";
+            outputToChat(helpoutput); 
+            
+        };
+        
         return {
             startup: RegisterEventHandlers,
             configparams: {
@@ -774,11 +1216,11 @@
                 "HIDEPING": HIDEPING,
                 "SHOWSFX": SHOWSFX
             }
-        }
+        };
         
-    }());
+    })();
 
 
-on('ready',() => {    
+on("ready",() => {    
     Teleport.startup();
 });
